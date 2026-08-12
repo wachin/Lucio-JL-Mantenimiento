@@ -77,6 +77,11 @@ python -m luciotech.main
 ```bash
 sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs \
     python3-pil python3-reportlab python3-matplotlib
+```
+
+Para lanzar el sistema
+
+```
 python3 -m luciotech.main
 ```
 
