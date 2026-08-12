@@ -22,6 +22,9 @@ from PyQt6.QtWidgets import (
 from luciotech.database.models import ServiceOrder
 from luciotech.services.order_service import OrderService
 from luciotech.config import ORDER_STATUSES
+from luciotech.ui.widgets.rich_text_edit import RichTextEdit
+from luciotech.ui.widgets.photo_tab import PhotoTab
+from luciotech.ui.widgets.history_timeline import HistoryTimeline
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +65,13 @@ class OrderViewDialog(QDialog):
         self._diagnosis_tab = self._create_diagnosis_tab()
         self._tabs.addTab(self._diagnosis_tab, "Diagnóstico")
 
-        # Tab: Historial (placeholder)
+        # Tab: Historial
         self._history_tab = self._create_history_tab()
         self._tabs.addTab(self._history_tab, "Historial")
+
+        # Tab: Fotografías
+        self._photo_tab = QWidget()  # placeholder, created after order loaded
+        self._tabs.addTab(self._photo_tab, "Fotografías")
 
         layout.addWidget(self._tabs)
 
@@ -191,19 +198,38 @@ class OrderViewDialog(QDialog):
     def _create_diagnosis_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        lbl = QLabel("Editor de diagnóstico — Fase 2")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet("font-size: 16px; color: palette(mid); padding: 40px;")
-        layout.addWidget(lbl)
+
+        # Diagnóstico
+        layout.addWidget(QLabel("<b>Diagnóstico técnico:</b>"))
+        self._editor_diagnosis = RichTextEdit()
+        self._editor_diagnosis.setMinimumHeight(150)
+        layout.addWidget(self._editor_diagnosis)
+
+        # Trabajo realizado
+        layout.addWidget(QLabel("<b>Trabajo realizado:</b>"))
+        self._editor_work = RichTextEdit()
+        self._editor_work.setMinimumHeight(150)
+        layout.addWidget(self._editor_work)
+
+        # Recomendaciones
+        layout.addWidget(QLabel("<b>Recomendaciones al cliente:</b>"))
+        self._editor_recommendations = RichTextEdit()
+        self._editor_recommendations.setMinimumHeight(150)
+        layout.addWidget(self._editor_recommendations)
+
+        # Botón guardar
+        self._btn_save_editors = QPushButton("Guardar diagnóstico")
+        self._btn_save_editors.clicked.connect(self._save_diagnosis)
+        layout.addWidget(self._btn_save_editors)
+
         return tab
 
     def _create_history_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        lbl = QLabel("Historial de eventos — Fase 2")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet("font-size: 16px; color: palette(mid); padding: 40px;")
-        layout.addWidget(lbl)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._history_timeline = HistoryTimeline(self._order) if self._order else QLabel("Sin orden")
+        layout.addWidget(self._history_timeline)
         return tab
 
     def _load_order(self) -> None:
@@ -252,6 +278,44 @@ class OrderViewDialog(QDialog):
             self._equip_os.setText(equipment.os or "No especificado")
             self._equip_accessories.setText(equipment.accessories or "Sin accesorios")
             self._equip_physical.setPlainText(equipment.physical_state or "")
+
+        # Load diagnosis
+        if self._order.diagnosis_html:
+            self._editor_diagnosis.set_html(self._order.diagnosis_html)
+        if self._order.work_done_html:
+            self._editor_work.set_html(self._order.work_done_html)
+        if self._order.recommendations_html:
+            self._editor_recommendations.set_html(self._order.recommendations_html)
+
+        # Set up photo tab
+        photo_tab = PhotoTab(self._order_id, order.order_number, self)
+        idx = self._tabs.indexOf(self._photo_tab)
+        self._tabs.removeTab(idx)
+        self._tabs.insertTab(idx, photo_tab, "Fotografías")
+        self._photo_tab = photo_tab
+
+        # Refresh history
+        if hasattr(self, '_history_timeline') and self._history_timeline:
+            self._history_timeline._load_history()
+
+    def _save_diagnosis(self) -> None:
+        """Guardar diagnóstico, trabajo y recomendaciones."""
+        if not self._order:
+            return
+        self._order.diagnosis_html = self._editor_diagnosis.to_html()
+        self._order.work_done_html = self._editor_work.to_html()
+        self._order.recommendations_html = self._editor_recommendations.to_html()
+        self._order_service.order_repo.update(self._order)
+        self._order_service.add_event(
+            self._order, "Diagnóstico actualizado", "Diagnóstico guardado",
+            f"Diagnóstico: {len(self._order.diagnosis_html or '')} chars"
+        )
+        QMessageBox.information(self, "Guardado", "Diagnóstico guardado exitosamente.")
+        logger.info("Diagnóstico guardado para orden %s", self._order.order_number)
+
+        # Refresh history tab
+        if hasattr(self, '_history_timeline') and self._history_timeline:
+            self._history_timeline._load_history()
 
     def _change_status(self) -> None:
         if not self._order:
