@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -25,6 +26,8 @@ from luciotech.config import ORDER_STATUSES
 from luciotech.ui.widgets.rich_text_edit import RichTextEdit
 from luciotech.ui.widgets.photo_tab import PhotoTab
 from luciotech.ui.widgets.history_timeline import HistoryTimeline
+from luciotech.ui.widgets.budget_payments_tab import BudgetPaymentsTab
+from luciotech.reports.pdf_service import ReceiptPDFService, TechnicalReportPDFService
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,10 @@ class OrderViewDialog(QDialog):
         self._photo_tab = QWidget()  # placeholder, created after order loaded
         self._tabs.addTab(self._photo_tab, "Fotografías")
 
+        # Tab: Presupuesto y Pagos
+        self._budget_tab = QWidget()  # placeholder
+        self._tabs.addTab(self._budget_tab, "Presupuesto y Pagos")
+
         layout.addWidget(self._tabs)
 
         # Botones
@@ -80,6 +87,18 @@ class OrderViewDialog(QDialog):
         self._btn_change_status = QPushButton("Cambiar estado")
         self._btn_change_status.clicked.connect(self._change_status)
         button_layout.addWidget(self._btn_change_status)
+
+        self._btn_pdf_receipt = QPushButton("📄 Comprobante PDF")
+        self._btn_pdf_receipt.clicked.connect(self._generate_receipt_pdf)
+        button_layout.addWidget(self._btn_pdf_receipt)
+
+        self._btn_pdf_report = QPushButton("📋 Informe Técnico PDF")
+        self._btn_pdf_report.clicked.connect(self._generate_technical_report)
+        button_layout.addWidget(self._btn_pdf_report)
+
+        self._btn_print = QPushButton("🖨 Imprimir")
+        self._btn_print.clicked.connect(self._print_order)
+        button_layout.addWidget(self._btn_print)
 
         button_layout.addStretch()
 
@@ -298,6 +317,13 @@ class OrderViewDialog(QDialog):
         if hasattr(self, '_history_timeline') and self._history_timeline:
             self._history_timeline._load_history()
 
+        # Set up budget tab
+        budget_tab = BudgetPaymentsTab(self._order, self)
+        idx = self._tabs.indexOf(self._budget_tab)
+        self._tabs.removeTab(idx)
+        self._tabs.insertTab(idx, budget_tab, "Presupuesto y Pagos")
+        self._budget_tab = budget_tab
+
     def _save_diagnosis(self) -> None:
         """Guardar diagnóstico, trabajo y recomendaciones."""
         if not self._order:
@@ -335,3 +361,97 @@ class OrderViewDialog(QDialog):
             self._order = self._order_service.change_status(self._order, status)
             self._load_order()
             logger.info("Estado cambiado a %s para orden %s", status, self._order.order_number)
+
+    def _generate_receipt_pdf(self) -> None:
+        """Generar comprobante de recepción en PDF."""
+        if not self._order:
+            return
+        try:
+            path = ReceiptPDFService.generate(self._order)
+            self._order_service.add_event(
+                self._order, "Documento generado", "Comprobante de recepción PDF",
+                f"Archivo: {Path(path).name}"
+            )
+            QMessageBox.information(self, "PDF generado", f"Comprobante guardado en:\n{path}")
+            self._open_file(path)
+        except Exception as e:
+            logger.exception("Error generando comprobante PDF")
+            QMessageBox.critical(self, "Error", f"No se pudo generar el PDF: {e}")
+
+    def _generate_technical_report(self) -> None:
+        """Generar informe técnico en PDF."""
+        if not self._order:
+            return
+        try:
+            path = TechnicalReportPDFService.generate(self._order)
+            self._order_service.add_event(
+                self._order, "Documento generado", "Informe técnico PDF",
+                f"Archivo: {Path(path).name}"
+            )
+            QMessageBox.information(self, "PDF generado", f"Informe técnico guardado en:\n{path}")
+            self._open_file(path)
+        except Exception as e:
+            logger.exception("Error generando informe técnico PDF")
+            QMessageBox.critical(self, "Error", f"No se pudo generar el PDF: {e}")
+
+    def _print_order(self) -> None:
+        """Imprimir resumen de la orden."""
+        from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+        from PyQt6.QtGui import QTextDocument
+
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        dialog.setWindowTitle("Imprimir orden")
+        if dialog.exec():
+            doc = QTextDocument()
+            doc.setHtml(self._build_printable_html())
+            doc.print(printer)
+
+    def _build_printable_html(self) -> str:
+        """Generar HTML imprimible de la orden."""
+        order = self._order
+        customer = order.customer
+        equipment = order.equipment
+        return f"""
+        <html><head><meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; font-size: 12px; }}
+            h1 {{ text-align: center; color: #1a1a2e; }}
+            .section {{ margin: 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 8px; }}
+            .label {{ font-weight: bold; color: #555; }}
+        </style></head><body>
+        <h1>JL Mantenimiento — Orden {order.order_number}</h1>
+        <div class="section">
+            <p><span class="label">Estado:</span> {order.status} | <span class="label">Prioridad:</span> {order.priority}</p>
+            <p><span class="label">Fecha de ingreso:</span> {order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else ""}</p>
+        </div>
+        <div class="section">
+            <h3>Cliente</h3>
+            <p><span class="label">Nombre:</span> {customer.full_name if customer else ""}</p>
+            <p><span class="label">Teléfono:</span> {customer.phone_primary if customer else ""}</p>
+        </div>
+        <div class="section">
+            <h3>Equipo</h3>
+            <p><span class="label">Tipo:</span> {equipment.equipment_type if equipment else ""}</p>
+            <p><span class="label">Marca/Modelo:</span> {equipment.brand or ""} {equipment.model or ""}</p>
+            <p><span class="label">Problema:</span> {equipment.reported_problem or ""}</p>
+        </div>
+        <div class="section">
+            <p><span class="label">Total:</span> ${order.total:,.2f} | <span class="label">Saldo:</span> ${order.balance:,.2f}</p>
+        </div>
+        </body></html>
+        """
+
+    @staticmethod
+    def _open_file(path: str) -> None:
+        """Abrir archivo PDF con la aplicación predeterminada."""
+        import subprocess
+        import sys
+        import os
+        if sys.platform == "darwin":
+            subprocess.run(["open", path])
+        elif sys.platform == "win32":
+            os.startfile(path)
+        else:
+            subprocess.run(["xdg-open", path])
+
