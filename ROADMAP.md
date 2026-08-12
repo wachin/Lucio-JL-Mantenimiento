@@ -61,6 +61,8 @@ Usar:
     Alembic
     PyMuPDF o ReportLab para generar PDF
     Pillow para procesar imágenes
+    matplotlib para gráficos (opcional)
+    platformdirs para rutas de aplicación multiplataforma
     pytest para pruebas
 
 Para el editor enriquecido utilizar:
@@ -144,10 +146,12 @@ Usar SQLite mediante SQLAlchemy.
 
 La base de datos debe guardarse por defecto en:
 
-    ~/.local/share/lucio-jl-service-manager/database.sqlite3
+    Linux:   ~/.local/share/lucio-jl-service-manager/database.sqlite3
+    Windows: %APPDATA%\lucio-jl-service-manager\database.sqlite3
+    macOS:   ~/Library/Application Support/lucio-jl-service-manager/database.sqlite3
 
-En Windows debe utilizarse una ruta apropiada dentro de los datos de
-aplicación del usuario.
+Usar `platformdirs` para obtener las rutas correctas en cada sistema
+operativo.
 
 Crear al menos las siguientes entidades.
 
@@ -527,11 +531,13 @@ poder editarse.
 
 Permitir:
 
-- Seleccionar una o varias fotografías.
+- Seleccionar una o varias fotografías desde el disco.
 - Arrastrar y soltar imágenes.
 - Pegar una imagen desde el portapapeles.
-- Capturar una fotografía desde una cámara web, cuando exista una cámara
-  compatible.
+- Cargar fotografías enviadas desde un celular mediante:
+  - Carpeta compartida en red local (SMB).
+  - Carpeta de sincronización (el usuario copia las fotos desde su celular por cable USB o Bluetooth).
+  - Escaneo de código QR que muestre instrucciones para enviar fotos.
 - Ver miniaturas.
 - Abrir la fotografía en tamaño completo.
 - Rotar la fotografía.
@@ -559,7 +565,9 @@ Al importar fotografías:
 
 Ruta sugerida:
 
-    ~/.local/share/lucio-jl-service-manager/attachments/<numero_orden>/
+    Linux:   ~/.local/share/lucio-jl-service-manager/attachments/<numero_orden>/
+    Windows: %APPDATA%\lucio-jl-service-manager\attachments\<numero_orden>\
+    macOS:   ~/Library/Application Support/lucio-jl-service-manager/attachments/<numero_orden>/
 
 ## 8.5. Confirmación
 
@@ -969,8 +977,9 @@ Los reportes económicos deben mostrar:
     Saldo pendiente
     Total cobrado
 
-Añadir gráficos sencillos mediante Qt Charts o matplotlib, manteniendo
-esta dependencia como opcional.
+Añadir gráficos sencillos mediante matplotlib, manteniendo esta
+dependencia como opcional. Los gráficos deben funcionar tanto en Linux
+como en Windows sin requerir dependencias gráficas adicionales.
 
 ------------------------------------------------------------------------
 
@@ -1113,7 +1122,9 @@ aunque la primera versión pueda funcionar con un solo usuario.
 
 Crear logs en:
 
-    ~/.local/state/lucio-jl-service-manager/logs/
+    Linux:   ~/.local/state/lucio-jl-service-manager/logs/
+    Windows: %APPDATA%\lucio-jl-service-manager\logs\
+    macOS:   ~/Library/Logs/lucio-jl-service-manager/
 
 Registrar:
 
@@ -1230,17 +1241,38 @@ Para Debian:
 - Incluir manual básico.
 - Declarar correctamente las dependencias.
 - Evitar descargar dependencias durante la ejecución.
+- Nota: PyQt6 puede no estar disponible en los repos de Debian estable.
+  Considerar empaquetar PyQt6 junto con la aplicación o usar un AppImage
+  que incluya todas las dependencias.
 
 Crear un archivo de escritorio similar a:
 
     [Desktop Entry]
     Type=Application
-    Name=Lucio JL Mantenimiento 
+    Name=JL Mantenimiento
     Comment=Gestión de recepción y reparación de equipos
     Exec=lucio-jl-service-manager
     Icon=lucio-jl-service-manager
     Categories=Office;Utility;
     Terminal=false
+
+## Empaquetado para Windows
+
+- Crear un ejecutable con PyInstaller o Nuitka.
+- Incluir todas las dependencias (PyQt6, SQLAlchemy, matplotlib, etc.).
+- Generar un instalador `.exe` o un ejecutable autoextraíble.
+- No requerir instalación de Python por separado.
+- Colocar la base de datos y archivos en `%APPDATA%\lucio-jl-service-manager\`.
+- Crear un acceso directo en el menú Inicio y escritorio.
+- Registrar la extensión `.jlmb` para copias de seguridad (opcional).
+
+## Compatibilidad entre plataformas
+
+- Usar `pathlib` y `os.path` compatibles con Windows y Linux.
+- Usar `platformdirs` para obtener rutas de datos de aplicación correctas en cada sistema.
+- Evitar caracteres no válidos en nombres de archivo entre sistemas.
+- Probar en Linux y Windows antes de cada release.
+- Usar `sys.platform` para detectar el sistema y ajustar rutas si es necesario.
 
 ------------------------------------------------------------------------
 
@@ -1267,15 +1299,18 @@ Crear un README completo con:
 
 para Windows con python y para lanzar:
 
-python -m luciotech.main
+    python -m luciotech.main
 
 No usar venv porque no es necesario
-    
-Y para Linux sin pip pues se usarán los paquetes python de los repositorios, y para lanzar 
 
-python3 -m luciotech.main
+Para Linux, usar los paquetes python de los repositorios y lanzar con:
 
-Para macOS semejante
+    python3 -m luciotech.main
+
+Para macOS, de forma semejante a Linux.
+
+En Windows, si se usa un empaquetado con PyInstaller o Nuitka, el usuario
+podrá ejecutar el programa directamente sin necesidad de Python instalado.
 
 ------------------------------------------------------------------------
 
