@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "luciotech"
+version = "0.1.0"
+description = "Sistema de recepción y reparación de equipos"
+requires-python = ">=3.11"
+dependencies = [
+    "PyQt6>=6.5",
+    "SQLAlchemy>=2.0",
+    "alembic>=1.12",
+    "platformdirs>=3.0",
+    "Pillow>=10.0",
+    "reportlab>=4.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-qt>=4.0"]
+
+[project.scripts]
+jl-mantenimiento = "luciotech.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
