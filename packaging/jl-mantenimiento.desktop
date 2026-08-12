@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=JL Mantenimiento
+Comment=Gestión de recepción y reparación de equipos
+Exec=jl-mantenimiento
+Icon=jl-mantenimiento
+Categories=Office;Utility;
+Terminal=false
+Keywords=maintenance;repair;service;equipment;

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>jl-mantenimiento</id>
+  <name>JL Mantenimiento</name>
+  <summary>Sistema de recepción y reparación de equipos</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Aplicación de escritorio profesional para registrar el ingreso,
+      diagnóstico, reparación y entrega de equipos tecnológicos recibidos
+      por un técnico.
+    </p>
+  </description>
+  <launchable type="desktop-id">jl-mantenimiento.desktop</launchable>
+  <provides>
+    <binary>jl-mantenimiento</binary>
+  </provides>
+</component>

@@ -22,9 +22,15 @@ from PyQt6.QtWidgets import (
     QFrame,
 )
 
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QAction
+
 from luciotech.config import APP_NAME, ORDER_STATUSES
 from luciotech.ui.pages.orders_page import OrdersPage
 from luciotech.ui.pages.reception_page import ReceptionPage
+from luciotech.ui.pages.reports_page import ReportsPage
+from luciotech.ui.dialogs.settings_dialog import SettingsDialog
+from luciotech.services.backup_service import BackupService
 
 logger = logging.getLogger(__name__)
 
@@ -146,20 +152,6 @@ class HomePage(PageBase):
         super().__init__("Inicio", parent)
 
 
-class OrdersPage(PageBase):
-    """Lista de órdenes."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Órdenes de servicio", parent)
-
-
-class ReceptionPage(PageBase):
-    """Formulario de nueva recepción."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Nueva recepción", parent)
-
-
 class CustomersPage(PageBase):
     """Gestión de clientes."""
 
@@ -181,25 +173,65 @@ class HistoryPage(PageBase):
         super().__init__("Historial", parent)
 
 
-class ReportsPage(PageBase):
-    """Reportes."""
+class BackupsPage(QWidget):
+    """Página de copias de seguridad."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Reportes", parent)
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        title = QLabel("Copias de seguridad")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; padding: 20px;")
+        layout.addWidget(title)
+
+        btn_layout = QHBoxLayout()
+        self._btn_create = QPushButton("💾 Crear copia de seguridad")
+        self._btn_create.clicked.connect(self._create_backup)
+        btn_layout.addWidget(self._btn_create)
+
+        self._btn_restore = QPushButton("📂 Restaurar copia")
+        self._btn_restore.clicked.connect(self._restore_backup)
+        btn_layout.addWidget(self._btn_restore)
+        layout.addLayout(btn_layout)
+
+        info = QLabel(
+            "Las copias de seguridad incluyen la base de datos, fotografías y configuración.\n"
+            "Se guardan en formato ZIP comprimido."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("padding: 20px; color: palette(mid);")
+        layout.addWidget(info)
+
+    def _create_backup(self) -> None:
+        path = BackupService.create_backup(self)
+        if path:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Copia creada", f"Copia guardada en:\n{path}")
+
+    def _restore_backup(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        if BackupService.restore_backup(self):
+            QMessageBox.information(self, "Restaurada", "Copia restaurada. Reinicie la aplicación.")
 
 
-class BackupsPage(PageBase):
-    """Copias de seguridad."""
+class SettingsPage(QWidget):
+    """Página de configuración."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Copias de seguridad", parent)
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        title = QLabel("Configuración")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; padding: 20px;")
+        layout.addWidget(title)
 
+        self._btn_open = QPushButton("⚙ Abrir configuración")
+        self._btn_open.setStyleSheet("font-size: 16px; padding: 10px 30px;")
+        self._btn_open.clicked.connect(self._open_settings)
+        layout.addWidget(self._btn_open)
+        layout.setAlignment(self._btn_open, Qt.AlignmentFlag.AlignCenter)
 
-class SettingsPage(PageBase):
-    """Configuración."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Configuración", parent)
+    def _open_settings(self) -> None:
+        dialog = SettingsDialog(self.window())
+        dialog.exec()
 
 
 class MainWindow(QMainWindow):
