@@ -1,79 +1,215 @@
 # JL Mantenimiento
 
-Sistema de recepción y reparación de equipos informáticos y electrónicos.
+<p align="center">
+  <strong>Sistema profesional de recepción y reparación de equipos informáticos y electrónicos</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.python.org/downloads/">
+    <img src="https://img.shields.io/badge/Python-3.11%2B-blue.svg?logo=python&logoColor=white" alt="Python 3.11+"/>
+  </a>
+  <a href="https://www.riverbankcomputing.com/software/pyqt/">
+    <img src="https://img.shields.io/badge/UI-PyQt6-green.svg?logo=qt" alt="PyQt6"/>
+  </a>
+  <a href="https://www.sqlalchemy.org/">
+    <img src="https://img.shields.io/badge/DB-SQLAlchemy%202-orange.svg?logo=sqlite" alt="SQLAlchemy 2"/>
+  </a>
+  <a href="https://github.com/Lucio-JL-Mantenimiento/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/>
+  </a>
+  <a href="https://github.com/Lucio-JL-Mantenimiento/releases">
+    <img src="https://img.shields.io/badge/Version-0.1.0--dev-lightgrey.svg" alt="Version 0.1.0-dev"/>
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?logo=linux&logoColor=white" alt="Platforms"/>
+  <img src="https://img.shields.io/badge/SQLite-3-brightgreen?logo=sqlite" alt="SQLite"/>
+  <img src="https://img.shields.io/badge/PDF-ReportLab-red?logo=adobeacrobatreader&logoColor=white" alt="ReportLab"/>
+  <img src="https://img.shields.io/badge/Images-Pillow-9cf?logo=python" alt="Pillow"/>
+  <img src="https://img.shields.io/badge/Tests-pytest-purple?logo=pytest" alt="pytest"/>
+</p>
+
+---
 
 ## Características
 
-- Registro de ingreso de equipos al taller
-- Gestión de clientes y equipos
-- Diagnóstico técnico con editor enriquecido
-- Historial completo de órdenes
-- Generación de comprobantes en PDF
-- Copias de seguridad
+| Módulo | Funcionalidades |
+|---|---|
+| **Recepción** | Registro de ingreso, datos del cliente y equipo, accesorios rápidos, fotografías desde celular |
+| **Órdenes** | Lista avanzada con filtros, búsqueda en tiempo real, doble clic para abrir, papelera |
+| **Diagnóstico** | Editor enriquecido tipo Word (negrita, colores, tablas, imágenes, buscar/reemplazar) |
+| **Fotografías** | Carga, miniaturas, rotación, clasificación por tipo, vista completa |
+| **Historial** | Línea de tiempo de estados y eventos, notas internas, eventos tipificados |
+| **Presupuesto** | Conceptos con cálculo automático, pagos, saldo pendiente, impuestos configurables |
+| **PDF** | Comprobante de recepción, informe técnico, vista previa, impresión directa |
+| **Reportes** | Filtros por fecha/estado, exportación PDF y CSV, resumen económico |
+| **Copias de seguridad** | ZIP completo (DB + fotos + config), restaurar con verificación, copia pre-restauración |
+| **Configuración** | Taller, técnico, costos, temas (claro/oscuro), formato de orden |
 
-## Requisitos
+## Tecnologías
 
-- Python 3.11 o superior
-- PyQt6
-- SQLite (incluido con Python)
+<p align="center">
+  <img src="https://img.shields.io/badge/PyQt6-6.5%2B-41CD52?logo=qt" alt="PyQt6 6.5+"/>
+  <img src="https://img.shields.io/badge/SQLAlchemy-2.0%2B-ff6600?logo=database" alt="SQLAlchemy 2"/>
+  <img src="https://img.shields.io/badge/Alembic-1.12%2B-557777?logo=python" alt="Alembic"/>
+  <img src="https://img.shields.io/badge/Pillow-10.0%2B-3776AB?logo=python" alt="Pillow"/>
+  <img src="https://img.shields.io/badge/ReportLab-4.0%2B-E4231B?logo=adobe" alt="ReportLab"/>
+  <img src="https://img.shields.io/badge/matplotlib-3.7%2B-1155AA?logo=python" alt="matplotlib"/>
+  <img src="https://img.shields.io/badge/platformdirs-3.0%2B-3776AB" alt="platformdirs"/>
+  <img src="https://img.shields.io/badge/pytest-7.0%2B-0A9EDC?logo=pytest" alt="pytest"/>
+</p>
 
-## Instalación
+## Instalación rápida
 
-### Linux
-
-```bash
-# Desde repositorios del sistema (Debian/Ubuntu)
-sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs python3-pil python3-reportlab python3-matplotlib
-
-# Ejecutar
-python3 -m luciotech.main
-```
-
-### Windows
-
-```bash
-# Con Python instalado
-python -m luciotech.main
-```
-
-### Entorno virtual (todos los sistemas)
+### Entorno virtual (recomendado)
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # Linux/macOS
-venv\Scripts\activate      # Windows
+python3 -m venv venv && source venv/bin/activate   # Linux/macOS
+python -m venv venv && venv\Scripts\activate        # Windows
+
 pip install -r requirements.txt
 python -m luciotech.main
 ```
+
+### Linux (paquetes del sistema)
+
+```bash
+sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs \
+    python3-pil python3-reportlab python3-matplotlib
+python3 -m luciotech.main
+```
+
+### Windows (ejecutable)
+
+```bash
+pip install pyinstaller
+pyinstaller packaging/jl-mantenimiento.spec
+dist\JL_Mantenimiento.exe
+```
+
+### AppImage (Linux)
+
+```bash
+bash packaging/build_appimage.sh
+# Luego: linuxdeploy --appdir=AppDir --output=appimage
+```
+
+## Capturas de pantalla
+
+> Próximamente: capturas de la interfaz en funcionamiento.
 
 ## Estructura del proyecto
 
 ```
 luciotech/
 ├── src/luciotech/
-│   ├── main.py           # Punto de entrada
-│   ├── app.py            # Configuración de la aplicación
-│   ├── config.py         # Constantes y configuración
-│   ├── database/         # Modelos y acceso a datos
-│   ├── services/         # Lógica de negocio
-│   ├── ui/               # Interfaz gráfica
-│   ├── reports/          # Generación de PDF
-│   └── utils/            # Utilidades
-└── tests/
+│   ├── main.py                 # Punto de entrada
+│   ├── app.py                  # Configuración de QApplication
+│   ├── config.py               # Constantes, rutas multiplataforma
+│   ├── database/
+│   │   ├── connection.py       # Motor SQLite + SQLAlchemy
+│   │   ├── models.py           # 8 entidades (Customer → Settings)
+│   │   ├── repositories.py     # CRUD con búsqueda y filtros
+│   │   └── migrations/         # Alembic para migraciones
+│   ├── services/
+│   │   ├── order_service.py    # CustomerService, EquipmentService, OrderService
+│   │   ├── image_service.py    # Procesamiento de imágenes (Pillow)
+│   │   └── backup_service.py   # Copias de seguridad ZIP
+│   ├── ui/
+│   │   ├── main_window.py      # QMainWindow con sidebar colapsable
+│   │   ├── pages/              # Páginas principales (órdenes, recepción, reportes)
+│   │   ├── dialogs/            # Diálogos (cliente, orden, configuración)
+│   │   └── widgets/            # Widgets (editor, fotos, historial, pagos)
+│   ├── reports/
+│   │   └── pdf_service.py      # Generador PDF (ReportLab)
+│   └── utils/
+│       └── logging_config.py   # Logging con rotación
+├── tests/
+│   └── test_core.py            # 10 pruebas unitarias
+├── packaging/
+│   ├── jl-mantenimiento.desktop    # Linux desktop entry
+│   ├── jl-mantenimiento.appdata.xml # AppStream metadata
+│   ├── build_appimage.sh       # Script AppImage
+│   └── jl-mantenimiento.spec   # PyInstaller (Windows)
+├── pyproject.toml
+├── requirements.txt
+├── README.md
+├── ROADMAP.md
+└── LICENSE
 ```
+
+## Flujo de uso rápido
+
+1. **Abrir** el programa
+2. **Nueva recepción** → buscar/crear cliente → registrar equipo → guardar
+3. **Lista de órdenes** → doble clic para abrir
+4. **Pestaña Diagnóstico** → escribir con formato (negrita, colores, tablas)
+5. **Pestaña Fotografías** → cargar fotos desde disco/carpeta (celular)
+6. **Pestaña Presupuesto** → añadir conceptos, registrar pagos
+7. **Botones PDF** → generar comprobante o informe técnico
+8. **Configuración** → cambiar tema, datos del taller
 
 ## Ubicación de datos
 
-- **Linux:** `~/.local/share/lucio-jl-service-manager/`
-- **Windows:** `%APPDATA%\lucio-jl-service-manager\`
-- **macOS:** `~/Library/Application Support/lucio-jl-service-manager/`
+| Sistema | Ruta |
+|---|---|
+| **Linux** | `~/.local/share/lucio-jl-service-manager/` |
+| **Windows** | `%APPDATA%\lucio-jl-service-manager\` |
+| **macOS** | `~/Library/Application Support/lucio-jl-service-manager/` |
+
+Logs en `~/.local/state/` (Linux), `%APPDATA%\logs\` (Windows).
 
 ## Pruebas
 
 ```bash
-pytest
+pytest tests/test_core.py -v
 ```
+
+| Prueba | Descripción |
+|---|---|
+| `test_create_customer` | Creación de cliente |
+| `test_search_customer` | Búsqueda por texto |
+| `test_duplicate_customer` | Detección por ID |
+| `test_create_equipment` | Registro de equipo |
+| `test_create_order` | Generación de orden |
+| `test_order_number_generation` | Formato automático |
+| `test_change_status` | Cambio + historial |
+| `test_payment_and_balance` | Pagos + saldo |
+| `test_database_persistence` | Persistencia SQLite |
+
+## Empaquetado
+
+| Formato | Comando |
+|---|---|
+| **.deb** (Debian) | `dpkg-deb --build packaging/debian` |
+| **AppImage** | `bash packaging/build_appimage.sh` |
+| **.exe** (Windows) | `pyinstaller packaging/jl-mantenimiento.spec` |
+
+## Resolución de problemas
+
+| Problema | Solución |
+|---|---|
+| `ModuleNotFoundError: PyQt6` | `pip install PyQt6` o usar paquetes del sistema |
+| `ModuleNotFoundError: platformdirs` | `pip install platformdirs` |
+| Error de base de datos | Verificar permisos en `~/.local/share/` |
+| PDF no genera | `pip install reportlab` |
+| Tema oscuro no aplica | Ir a Configuración → Apariencia → Oscuro (Fusion) |
+
+## Contribuir
+
+1. Fork el repositorio
+2. Crea una rama (`git checkout -b feature/nueva-funcion`)
+3. Commit (`git commit -m "Añadida nueva función"`)
+4. Push (`git push origin feature/nueva-funcion`)
+5. Abre un Pull Request
 
 ## Licencia
 
-Ver archivo LICENSE.
+Distribuido bajo la licencia **MIT**. Ver [`LICENSE`](LICENSE) para más detalles.
+
+---
+
+<p align="center">
+  Hecho con ❤️ para el servicio técnico de <strong>Ing. Joseph Lucio</strong>
+</p>
