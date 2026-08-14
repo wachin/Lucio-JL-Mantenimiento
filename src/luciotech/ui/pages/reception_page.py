@@ -27,9 +27,10 @@ from PyQt6.QtWidgets import (
     QTabWidget,
 )
 
-from luciotech.config import EQUIPMENT_TYPES, PRIORITIES, ORDER_STATUSES, ACCESSORIES_BY_TYPE
+from luciotech.config import PRIORITIES, ORDER_STATUSES, ACCESSORIES_BY_TYPE
 from luciotech.database.models import Customer, Equipment
 from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
+from luciotech.services.settings_service import SettingsService
 from luciotech.ui.dialogs.customer_dialog import CustomerSelectDialog
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class ReceptionPage(QWidget):
         self._customer_service = CustomerService()
         self._equipment_service = EquipmentService()
         self._order_service = OrderService()
+        self._settings_service = SettingsService()
         self._selected_customer: Customer | None = None
         self._accessory_checks: list[QCheckBox] = []
         self._init_ui()
@@ -135,7 +137,7 @@ class ReceptionPage(QWidget):
         layout = QFormLayout(group)
 
         self._equip_type = QComboBox()
-        self._equip_type.addItems(EQUIPMENT_TYPES)
+        self._equip_type.addItems(self._settings_service.get_equipment_types())
         self._equip_type.currentTextChanged.connect(self._on_type_changed)
         layout.addRow("Tipo de equipo *:", self._equip_type)
 
@@ -177,7 +179,7 @@ class ReceptionPage(QWidget):
         self._acc_other.setPlaceholderText("Otros accesorios (escribir)...")
         layout.addRow(self._acc_group)
 
-        self._on_type_changed(EQUIPMENT_TYPES[0])
+        self._on_type_changed(self._equip_type.currentText())
 
         return group
 
@@ -213,6 +215,9 @@ class ReceptionPage(QWidget):
         # Técnico
         self._recv_technician = QLineEdit()
         self._recv_technician.setPlaceholderText("Nombre del técnico")
+        self._recv_technician.setText(
+            self._settings_service.get("technician_name", "Ing. Joseph Lucio")
+        )
         layout.addRow("Técnico responsable:", self._recv_technician)
 
         # Costos
@@ -399,6 +404,25 @@ class ReceptionPage(QWidget):
         self._equip_notes.clear()
         self._recv_diag_cost.setValue(0)
         self._recv_advance.setValue(0)
-        self._recv_technician.clear()
+        self._recv_technician.setText(
+            self._settings_service.get("technician_name", "Ing. Joseph Lucio")
+        )
         for cb in self._accessory_checks:
             cb.setChecked(False)
+
+    def refresh_settings(self) -> None:
+        """Aplicar catálogos y valores predeterminados recién guardados."""
+        current_type = self._equip_type.currentText()
+        self._settings_service.session.expire_all()
+        self._equip_type.blockSignals(True)
+        self._equip_type.clear()
+        self._equip_type.addItems(self._settings_service.get_equipment_types())
+        index = self._equip_type.findText(current_type)
+        if index >= 0:
+            self._equip_type.setCurrentIndex(index)
+        self._equip_type.blockSignals(False)
+        self._on_type_changed(self._equip_type.currentText())
+        if not self._recv_technician.text().strip():
+            self._recv_technician.setText(
+                self._settings_service.get("technician_name", "Ing. Joseph Lucio")
+            )

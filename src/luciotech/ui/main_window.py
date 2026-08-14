@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -172,6 +172,8 @@ class BackupsPage(QWidget):
 class SettingsPage(QWidget):
     """Página de configuración."""
 
+    settings_changed = pyqtSignal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -187,6 +189,7 @@ class SettingsPage(QWidget):
 
     def _open_settings(self) -> None:
         dialog = SettingsDialog(self.window())
+        dialog.configuration_saved.connect(self.settings_changed.emit)
         dialog.exec()
 
 
@@ -210,11 +213,8 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Barra lateral
-        from PyQt6.QtCore import pyqtSignal
-
         # Crear señal dinámicamente
         class SidebarWithSignal(Sidebar):
-            from PyQt6.QtCore import pyqtSignal
             section_selected = pyqtSignal(str)
 
         self._sidebar = SidebarWithSignal()
@@ -258,7 +258,8 @@ class MainWindow(QMainWindow):
         self._pages["Historial"] = self._history_page
         self._pages["Reportes"] = ReportsPage()
         self._pages["Copias de seguridad"] = BackupsPage()
-        self._pages["Configuración"] = SettingsPage()
+        self._settings_page = SettingsPage()
+        self._pages["Configuración"] = self._settings_page
 
         for page in self._pages.values():
             self._stack.addWidget(page)
@@ -277,6 +278,9 @@ class MainWindow(QMainWindow):
             lambda: self._on_order_opened(-1)
         )
         self._home_page.orders_requested.connect(self._show_orders)
+        self._settings_page.settings_changed.connect(
+            self._reception_page.refresh_settings
+        )
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Herramientas")

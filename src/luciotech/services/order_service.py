@@ -15,6 +15,7 @@ from luciotech.database.repositories import (
     HistoryEventRepo,
     PaymentRepo,
 )
+from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,7 @@ class OrderService:
         self.order_repo = OrderRepo(self.session)
         self.status_repo = StatusHistoryRepo(self.session)
         self.event_repo = HistoryEventRepo(self.session)
+        self.settings = SettingsService()
 
     def get_by_id(self, order_id: int):
         return self.order_repo.get_by_id(order_id)
@@ -225,21 +227,23 @@ class OrderService:
     def generate_order_number(self) -> str:
         """Generar número de orden automático."""
         now = datetime.now()
-        # Formato: ORD-YYYYMMDD-NNNN
         sequence = self._get_next_sequence(now)
-        return f"ORD-{now.year}{now.month:02d}{now.day:02d}-{sequence:04d}"
+        template = self.settings.get_order_format()
+        while True:
+            number = self.settings.format_order_number(template, now, sequence)
+            if self.order_repo.get_by_number(number) is None:
+                return number
+            sequence += 1
 
     def _get_next_sequence(self, today: datetime) -> int:
         """Obtener el siguiente número de secuencia para hoy."""
-        prefix = f"ORD-{today.year}{today.month:02d}{today.day:02d}-"
-        orders = self.order_repo.search()
-        today_orders = [o for o in orders if o.order_number.startswith(prefix)]
-        if not today_orders:
-            return 1
-        max_seq = max(
-            int(o.order_number.split("-")[-1]) for o in today_orders if o.order_number.split("-")[-1].isdigit()
-        )
-        return max_seq + 1
+        orders = self.order_repo.get_all(active_only=False)
+        today_orders = [
+            order
+            for order in orders
+            if order.created_at and order.created_at.date() == today.date()
+        ]
+        return len(today_orders) + 1
 
     def create_order(
         self,
@@ -253,6 +257,7 @@ class OrderService:
         advance_payment: float = 0.0,
         status: str = "Recibido",
         reported_problem: str = "",
+        warranty_days: int | None = None,
     ) -> ServiceOrder:
         """Crear una nueva orden de servicio."""
         order_number = self.generate_order_number()
@@ -273,6 +278,11 @@ class OrderService:
             total=total,
             advance_payment=advance_payment,
             balance=balance,
+            warranty_days=(
+                warranty_days
+                if warranty_days is not None
+                else self.settings.get_int("warranty_days", 30)
+            ),
         )
         order = self.order_repo.create(order)
 

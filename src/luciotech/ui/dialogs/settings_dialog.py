@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
+from datetime import datetime
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -22,7 +22,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QMessageBox,
-    QGroupBox,
+    QListWidget,
+    QInputDialog,
 )
 
 from luciotech.config import (
@@ -36,6 +37,7 @@ from luciotech.config import (
 from luciotech.database.connection import get_session
 from luciotech.database.models import Settings
 from luciotech.services.backup_service import BackupService
+from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,8 @@ THEMES = {
 
 class SettingsDialog(QDialog):
     """Ventana de configuración organizada en categorías."""
+
+    configuration_saved = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -90,6 +94,8 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._create_costs_tab(), "Costos e impuestos")
         # Apariencia
         tabs.addTab(self._create_appearance_tab(), "Apariencia")
+        # Catálogos
+        tabs.addTab(self._create_catalogs_tab(), "Tipos de equipo")
         # Copias de seguridad
         tabs.addTab(self._create_backup_tab(), "Copias de seguridad")
 
@@ -193,6 +199,59 @@ class SettingsDialog(QDialog):
 
         return tab
 
+    def _create_catalogs_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        info = QLabel(
+            "Administre los tipos disponibles al registrar una recepción. "
+            "Los equipos ya guardados no se modifican."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        self._equipment_types = QListWidget()
+        self._equipment_types.addItems(SettingsService().get_equipment_types())
+        layout.addWidget(self._equipment_types)
+
+        buttons = QHBoxLayout()
+        add_button = QPushButton("Añadir tipo")
+        add_button.clicked.connect(self._add_equipment_type)
+        buttons.addWidget(add_button)
+        remove_button = QPushButton("Eliminar seleccionado")
+        remove_button.clicked.connect(self._remove_equipment_type)
+        buttons.addWidget(remove_button)
+        reset_button = QPushButton("Usar lista predeterminada")
+        reset_button.clicked.connect(self._reset_equipment_types)
+        buttons.addWidget(reset_button)
+        buttons.addStretch()
+        layout.addLayout(buttons)
+        return tab
+
+    def _add_equipment_type(self) -> None:
+        value, accepted = QInputDialog.getText(
+            self, "Añadir tipo de equipo", "Nombre del tipo:"
+        )
+        value = value.strip()
+        if not accepted or not value:
+            return
+        existing = {
+            self._equipment_types.item(row).text().casefold()
+            for row in range(self._equipment_types.count())
+        }
+        if value.casefold() in existing:
+            QMessageBox.warning(self, "Tipo duplicado", "Ese tipo de equipo ya existe.")
+            return
+        self._equipment_types.addItem(value)
+
+    def _remove_equipment_type(self) -> None:
+        row = self._equipment_types.currentRow()
+        if row >= 0:
+            self._equipment_types.takeItem(row)
+
+    def _reset_equipment_types(self) -> None:
+        self._equipment_types.clear()
+        self._equipment_types.addItems(EQUIPMENT_TYPES)
+
     def _create_backup_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -254,6 +313,24 @@ class SettingsDialog(QDialog):
 
     def _save_all(self) -> None:
         """Guardar toda la configuración."""
+        order_format = self._order_format.text().strip()
+        try:
+            SettingsService.format_order_number(order_format, datetime.now(), 1)
+        except ValueError as error:
+            QMessageBox.warning(self, "Formato de orden inválido", str(error))
+            return
+
+        equipment_types = [
+            self._equipment_types.item(row).text().strip()
+            for row in range(self._equipment_types.count())
+            if self._equipment_types.item(row).text().strip()
+        ]
+        if not equipment_types:
+            QMessageBox.warning(
+                self, "Tipos de equipo", "Debe conservar al menos un tipo de equipo."
+            )
+            return
+
         self._set_setting("workshop_name", self._workshop_name.text())
         self._set_setting("workshop_address", self._workshop_address.text())
         self._set_setting("workshop_phone", self._workshop_phone.text())
@@ -261,18 +338,20 @@ class SettingsDialog(QDialog):
         self._set_setting("logo_path", self._logo_path.text())
         self._set_setting("technician_name", self._tech_name.text())
         self._set_setting("technician_id", self._tech_id.text())
-        self._set_setting("order_format", self._order_format.text())
+        self._set_setting("order_format", order_format)
         self._set_setting("warranty_days", str(self._warranty_days.value()))
         self._set_setting("currency", self._currency.text())
         self._set_setting("use_tax", "true" if self._use_tax.isChecked() else "false")
         self._set_setting("tax_rate", str(self._tax_rate.value()))
         self._set_setting("theme", self._theme_combo.currentText())
+        self._set_setting("equipment_types", json.dumps(equipment_types, ensure_ascii=False))
 
         QMessageBox.information(self, "Guardado", "Configuración guardada exitosamente.")
         logger.info("Configuración guardada")
 
         # Aplicar tema
         self._apply_theme()
+        self.configuration_saved.emit()
 
     def _reset_settings(self) -> None:
         reply = QMessageBox.question(
@@ -290,10 +369,11 @@ class SettingsDialog(QDialog):
         theme_key = self._theme_combo.currentText()
         theme_value = THEMES.get(theme_key, "")
 
-        app = self.window().windowHandle().screen().app() if self.window() else None
-        if not app:
-            from PyQt6.QtWidgets import QApplication
-            app = QApplication.instance()
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is None:
+            return
 
         if theme_value == "fusion_dark":
             app.setStyle("Fusion")
@@ -315,6 +395,8 @@ class SettingsDialog(QDialog):
             app.setPalette(dark_palette)
         elif theme_value == "fusion_light":
             app.setStyle("Fusion")
+            app.setPalette(app.style().standardPalette())
         else:
             # Sistema
             app.setStyle("")
+            app.setPalette(app.style().standardPalette())

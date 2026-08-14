@@ -15,9 +15,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from luciotech.config import EQUIPMENT_TYPES
 from luciotech.database.models import Equipment
 from luciotech.services.order_service import EquipmentService
+from luciotech.services.settings_service import SettingsService
 
 
 class EquipmentEditDialog(QDialog):
@@ -41,7 +41,7 @@ class EquipmentEditDialog(QDialog):
 
         self._type = QComboBox()
         self._type.setEditable(True)
-        self._type.addItems(EQUIPMENT_TYPES)
+        self._type.addItems(SettingsService().get_equipment_types())
         form.addRow("Tipo de equipo *:", self._type)
 
         self._brand = QLineEdit()
