@@ -62,14 +62,30 @@
 
 ## Instalación rápida
 
+### Linux — inicio rápido
+
+Después de instalar las dependencias, el comando recomendado desde la carpeta
+del proyecto es:
+
+```bash
+python3 main.py
+```
+
+No necesitas configurar `PYTHONPATH`. También puedes usar el lanzador de Linux,
+que configura automáticamente las variables de compatibilidad de Qt:
+
+```bash
+./run.sh
+```
+
 ### Entorno virtual (recomendado)
 
 ```bash
 python3 -m venv venv && source venv/bin/activate   # Linux/macOS
 python -m venv venv && venv\Scripts\activate        # Windows
 
-pip install -r requirements.txt
-python -m luciotech.main
+pip install -e .
+jl-mantenimiento
 ```
 
 ### Linux (paquetes del sistema)
@@ -79,26 +95,24 @@ sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs \
     python3-pil python3-reportlab python3-matplotlib
 ```
 
-Para lanzar el sistema
-
-```bash
-python3 -m luciotech.main
-```
-
 ### Linux (paquetes del sistema — sin venv)
 
-```bash
-QT_QPA_PLATFORMTHEME= QT_QPA_PLATFORM=xcb QT_LOGGING_RULES='*.debug=false;qt6ct.*=false' PYTHONPATH=src python3 -m luciotech.main
-```
-
-O usando el script incluido:
+Usa el lanzador incluido:
 
 ```bash
 ./run.sh
 ```
 
-> **Nota:** No ejecutar con `&` (background). Qt necesita el TTY completo para el event loop.
-> `QT_QPA_PLATFORMTHEME=` deshabilita qt6ct (causa crashes en algunas distros). `QT_QPA_PLATFORM=xcb` usa X11 directo.
+El equivalente manual, útil para diagnóstico, es:
+
+```bash
+QT_QPA_PLATFORM=xcb QT_QPA_PLATFORMTHEME= \
+  QT_LOGGING_RULES='*.debug=false;qt6ct.*=false' python3 main.py
+```
+
+> **Nota:** `QT_QPA_PLATFORMTHEME=` deshabilita qt6ct, que puede causar fallos
+> en algunas distribuciones. El lanzador usa X11 (`xcb`) por defecto, pero
+> respeta un valor de `QT_QPA_PLATFORM` definido previamente.
 
 ### Windows (ejecutable)
 
@@ -123,6 +137,7 @@ bash packaging/build_appimage.sh
 
 ```
 luciotech/
+├── main.py                     # Lanzador directo: python3 main.py
 ├── src/luciotech/
 │   ├── main.py                 # Punto de entrada
 │   ├── app.py                  # Configuración de QApplication
