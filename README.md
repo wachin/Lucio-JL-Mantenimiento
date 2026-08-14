@@ -88,7 +88,7 @@ python3 -m luciotech.main
 ### Linux (paquetes del sistema — sin venv)
 
 ```bash
-PYTHONPATH=src QT_LOGGING_RULES="*.debug=false;qt6ct.*=false" python3 -m luciotech.main
+QT_QPA_PLATFORMTHEME= QT_QPA_PLATFORM=xcb QT_LOGGING_RULES='*.debug=false;qt6ct.*=false' PYTHONPATH=src python3 -m luciotech.main
 ```
 
 O usando el script incluido:
@@ -98,6 +98,7 @@ O usando el script incluido:
 ```
 
 > **Nota:** No ejecutar con `&` (background). Qt necesita el TTY completo para el event loop.
+> `QT_QPA_PLATFORMTHEME=` deshabilita qt6ct (causa crashes en algunas distros). `QT_QPA_PLATFORM=xcb` usa X11 directo.
 
 ### Windows (ejecutable)
 

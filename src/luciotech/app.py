@@ -42,6 +42,13 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     init_db()
     window = MainWindow()
     window.show()
+
+    # QApplication does not take Python ownership of top-level widgets.  Keep a
+    # strong reference for the whole application lifetime; otherwise ``window``
+    # is destroyed when this function returns and Qt exits immediately because
+    # there are no windows left.
+    app.main_window = window  # type: ignore[attr-defined]
+
     # Ensure window is raised above other windows
     QTimer.singleShot(100, window.raise_)
     QTimer.singleShot(150, window.activateWindow)
