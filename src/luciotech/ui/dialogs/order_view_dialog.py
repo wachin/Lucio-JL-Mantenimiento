@@ -313,9 +313,12 @@ class OrderViewDialog(QDialog):
         self._tabs.insertTab(idx, photo_tab, "Fotografías")
         self._photo_tab = photo_tab
 
-        # Refresh history
-        if hasattr(self, '_history_timeline') and self._history_timeline:
-            self._history_timeline._load_history()
+        # Sustituir el marcador inicial por el historial de la orden cargada.
+        history_layout = self._history_tab.layout()
+        history_layout.removeWidget(self._history_timeline)
+        self._history_timeline.deleteLater()
+        self._history_timeline = HistoryTimeline(order, self._history_tab)
+        history_layout.addWidget(self._history_timeline)
 
         # Set up budget tab
         budget_tab = BudgetPaymentsTab(self._order, self)
@@ -409,9 +412,20 @@ class OrderViewDialog(QDialog):
 
     def _build_printable_html(self) -> str:
         """Generar HTML imprimible de la orden."""
+        from html import escape
+        from luciotech.services.settings_service import SettingsService
+
         order = self._order
         customer = order.customer
         equipment = order.equipment
+        settings = SettingsService()
+        workshop_name = escape(settings.get("workshop_name", "JL Mantenimiento"))
+        currency = settings.get("currency", "USD").strip().upper() or "USD"
+        currency_prefix = "$" if currency == "USD" else f"{escape(currency)} "
+
+        def safe(value) -> str:
+            return escape(str(value or ""))
+
         return f"""
         <html><head><meta charset="utf-8">
         <style>
@@ -420,24 +434,24 @@ class OrderViewDialog(QDialog):
             .section {{ margin: 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 8px; }}
             .label {{ font-weight: bold; color: #555; }}
         </style></head><body>
-        <h1>JL Mantenimiento — Orden {order.order_number}</h1>
+        <h1>{workshop_name} — Orden {safe(order.order_number)}</h1>
         <div class="section">
-            <p><span class="label">Estado:</span> {order.status} | <span class="label">Prioridad:</span> {order.priority}</p>
+            <p><span class="label">Estado:</span> {safe(order.status)} | <span class="label">Prioridad:</span> {safe(order.priority)}</p>
             <p><span class="label">Fecha de ingreso:</span> {order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else ""}</p>
         </div>
         <div class="section">
             <h3>Cliente</h3>
-            <p><span class="label">Nombre:</span> {customer.full_name if customer else ""}</p>
-            <p><span class="label">Teléfono:</span> {customer.phone_primary if customer else ""}</p>
+            <p><span class="label">Nombre:</span> {safe(customer.full_name if customer else "")}</p>
+            <p><span class="label">Teléfono:</span> {safe(customer.phone_primary if customer else "")}</p>
         </div>
         <div class="section">
             <h3>Equipo</h3>
-            <p><span class="label">Tipo:</span> {equipment.equipment_type if equipment else ""}</p>
-            <p><span class="label">Marca/Modelo:</span> {equipment.brand or ""} {equipment.model or ""}</p>
-            <p><span class="label">Problema:</span> {equipment.reported_problem or ""}</p>
+            <p><span class="label">Tipo:</span> {safe(equipment.equipment_type if equipment else "")}</p>
+            <p><span class="label">Marca/Modelo:</span> {safe(equipment.brand if equipment else "")} {safe(equipment.model if equipment else "")}</p>
+            <p><span class="label">Problema:</span> {safe(equipment.reported_problem if equipment else "")}</p>
         </div>
         <div class="section">
-            <p><span class="label">Total:</span> ${order.total:,.2f} | <span class="label">Saldo:</span> ${order.balance:,.2f}</p>
+            <p><span class="label">Total:</span> {currency_prefix}{order.total:,.2f} | <span class="label">Saldo:</span> {currency_prefix}{order.balance:,.2f}</p>
         </div>
         </body></html>
         """
@@ -454,4 +468,3 @@ class OrderViewDialog(QDialog):
             os.startfile(path)
         else:
             subprocess.run(["xdg-open", path])
-

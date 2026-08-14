@@ -38,8 +38,12 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     # Crear y mostrar ventana principal
     from luciotech.ui.main_window import MainWindow
     from luciotech.database.connection import init_db
+    from luciotech.services.settings_service import SettingsService
+    from luciotech.ui.theme import apply_theme
 
     init_db()
+    settings = SettingsService()
+    apply_theme(app, settings.get("theme", "Claro (sistema)"))
     window = MainWindow()
     window.show()
 

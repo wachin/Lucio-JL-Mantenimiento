@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
-import os
+import re
 from datetime import datetime
+from html import unescape
 from io import BytesIO
 from pathlib import Path
 from typing import Sequence
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 from reportlab.platypus import (
@@ -20,19 +22,45 @@ from reportlab.platypus import (
     Table,
     TableStyle,
     Image,
-    PageBreak,
     HRFlowable,
-    KeepTogether,
 )
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 from luciotech.database.models import ServiceOrder, Photo
 from luciotech.config import get_data_dir
+from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
 # Tamaño de celda para miniaturas en PDF
 THUMB_SIZE_PDF = 45 * mm
+
+
+def _document_settings() -> dict[str, str]:
+    settings = SettingsService()
+    return {
+        "workshop_name": settings.get("workshop_name", "JL Mantenimiento"),
+        "technician_name": settings.get("technician_name", "Ing. Joseph Lucio"),
+        "workshop_address": settings.get("workshop_address", ""),
+        "workshop_phone": settings.get("workshop_phone", ""),
+        "workshop_email": settings.get("workshop_email", ""),
+        "logo_path": settings.get("logo_path", ""),
+        "currency": settings.get("currency", "USD").strip().upper() or "USD",
+    }
+
+
+def _money(value: float, currency: str) -> str:
+    prefix = "$" if currency == "USD" else f"{currency} "
+    return f"{prefix}{value:,.2f}"
+
+
+def _plain_html(value: str) -> str:
+    return escape(unescape(re.sub(r"<[^>]+>", "", value)))
+
+
+def _safe_filename(value: str) -> str:
+    cleaned = re.sub(r"[^\w.-]+", "-", value, flags=re.UNICODE).strip("-._")
+    return cleaned[:40] or "Cliente"
 
 
 class PDFBuilder:
@@ -109,11 +137,13 @@ class PDFBuilder:
 
     def _add_field(self, label: str, value: str, bold_label: bool = True) -> None:
         """Añadir par etiqueta-valor."""
+        safe_label = escape(str(label))
+        safe_value = escape(str(value or "—"))
         if bold_label:
-            self.story.append(Paragraph(f"<b>{label}:</b>", self.styles["LabelStyle"]))
+            self.story.append(Paragraph(f"<b>{safe_label}:</b>", self.styles["LabelStyle"]))
         else:
-            self.story.append(Paragraph(f"{label}:", self.styles["LabelStyle"]))
-        self.story.append(Paragraph(value or "—", self.styles["ValueStyle"]))
+            self.story.append(Paragraph(f"{safe_label}:", self.styles["LabelStyle"]))
+        self.story.append(Paragraph(safe_value, self.styles["ValueStyle"]))
 
     def _add_separator(self) -> None:
         self.story.append(Spacer(1, 3 * mm))
@@ -128,11 +158,11 @@ class PDFBuilder:
         header_style = ParagraphStyle("HeaderCell", fontSize=9, textColor=colors.white, fontName="Helvetica-Bold", alignment=TA_CENTER)
         cell_style = ParagraphStyle("CellData", fontSize=9, fontName="Helvetica", alignment=TA_LEFT)
 
-        header_cells = [Paragraph(h, header_style) for h in headers]
+        header_cells = [Paragraph(escape(str(h)), header_style) for h in headers]
         rows = [header_cells]
 
         for row in data:
-            row_cells = [Paragraph(str(c), cell_style) for c in row]
+            row_cells = [Paragraph(escape(str(c)), cell_style) for c in row]
             rows.append(row_cells)
 
         table = Table(rows, colWidths=col_widths, repeatRows=1)
@@ -153,11 +183,20 @@ class PDFBuilder:
         ]))
         return table
 
-    def add_header(self, workshop_name: str, technician: str = "", address: str = "", phone: str = "", email: str = "") -> None:
+    def add_header(self, workshop_name: str, technician: str = "", address: str = "", phone: str = "", email: str = "", logo_path: str = "") -> None:
         """Encabezado con datos del taller."""
-        self.story.append(Paragraph(workshop_name, self.styles["DocTitle"]))
+        if logo_path and Path(logo_path).is_file():
+            try:
+                logo = Image(logo_path)
+                logo._restrictSize(45 * mm, 22 * mm)
+                logo.hAlign = "CENTER"
+                self.story.append(logo)
+                self.story.append(Spacer(1, 2 * mm))
+            except Exception:
+                logger.exception("No se pudo incluir el logo en el PDF")
+        self.story.append(Paragraph(escape(workshop_name), self.styles["DocTitle"]))
         if technician:
-            self.story.append(Paragraph(f"Técnico: {technician}", ParagraphStyle("SubHeader", parent=self.styles["Normal"], fontSize=11, alignment=TA_CENTER)))
+            self.story.append(Paragraph(f"Técnico: {escape(technician)}", ParagraphStyle("SubHeader", parent=self.styles["Normal"], fontSize=11, alignment=TA_CENTER)))
         details = []
         if address:
             details.append(address)
@@ -166,7 +205,7 @@ class PDFBuilder:
         if email:
             details.append(email)
         if details:
-            self.story.append(Paragraph(" | ".join(details), self.styles["FooterStyle"]))
+            self.story.append(Paragraph(escape(" | ".join(details)), self.styles["FooterStyle"]))
         self.story.append(Spacer(1, 5 * mm))
         self._add_separator()
 
@@ -246,11 +285,19 @@ class ReceiptPDFService:
         customer = order.customer
         equipment = order.equipment
         photos = order.photos[:6]  # Max 6 en comprobante
+        settings = _document_settings()
 
         builder = PDFBuilder(title=f"Comprobante de Recepción - {order.order_number}")
 
         # Encabezado
-        builder.add_header("JL Mantenimiento", order.technician or "Ing. Joseph Lucio")
+        builder.add_header(
+            settings["workshop_name"],
+            order.technician or settings["technician_name"],
+            settings["workshop_address"],
+            settings["workshop_phone"],
+            settings["workshop_email"],
+            settings["logo_path"],
+        )
 
         # Título del documento
         builder.story.append(Paragraph("COMPROBANTE DE RECEPCIÓN", builder.styles["DocTitle"]))
@@ -292,9 +339,9 @@ class ReceiptPDFService:
 
         # Costos
         builder._add_section("Costos iniciales")
-        builder._add_field("Costo de diagnóstico", f"${order.diagnostic_cost:,.2f}")
-        builder._add_field("Anticipo recibido", f"${order.advance_payment:,.2f}")
-        builder._add_field("Saldo pendiente", f"${order.balance:,.2f}")
+        builder._add_field("Costo de diagnóstico", _money(order.diagnostic_cost, settings["currency"]))
+        builder._add_field("Anticipo recibido", _money(order.advance_payment, settings["currency"]))
+        builder._add_field("Saldo pendiente", _money(order.balance, settings["currency"]))
 
         # Fotos
         if photos:
@@ -311,7 +358,7 @@ class ReceiptPDFService:
         # Guardar
         if not output_path:
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            name_slug = (customer.full_name if customer else "Cliente").replace(" ", "-")[:30]
+            name_slug = _safe_filename(customer.full_name if customer else "Cliente")
             output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Comprobante-Recepcion.pdf")
 
         return builder.save_to_file(output_path)
@@ -325,9 +372,17 @@ class TechnicalReportPDFService:
         customer = order.customer
         equipment = order.equipment
         photos = order.photos
+        settings = _document_settings()
 
         builder = PDFBuilder(title=f"Informe Técnico - {order.order_number}")
-        builder.add_header("JL Mantenimiento", order.technician or "Ing. Joseph Lucio")
+        builder.add_header(
+            settings["workshop_name"],
+            order.technician or settings["technician_name"],
+            settings["workshop_address"],
+            settings["workshop_phone"],
+            settings["workshop_email"],
+            settings["logo_path"],
+        )
 
         builder.story.append(Paragraph("INFORME TÉCNICO", builder.styles["DocTitle"]))
         builder.story.append(Spacer(1, 5 * mm))
@@ -355,51 +410,42 @@ class TechnicalReportPDFService:
         # Diagnóstico
         builder._add_section("Diagnóstico Técnico")
         if order.diagnosis_html:
-            from reportlab.lib.utils import simpleSplit
-            # Strip HTML for plain text in PDF
-            import re
-            text = re.sub(r'<[^>]+>', '', order.diagnosis_html)
-            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-            builder.story.append(Paragraph(text, builder.styles["ValueStyle"]))
+            builder.story.append(Paragraph(_plain_html(order.diagnosis_html), builder.styles["ValueStyle"]))
         else:
             builder.story.append(Paragraph("Sin diagnóstico registrado.", builder.styles["ValueStyle"]))
 
         # Trabajo realizado
         builder._add_section("Trabajo Realizado")
         if order.work_done_html:
-            text = re.sub(r'<[^>]+>', '', order.work_done_html)
-            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-            builder.story.append(Paragraph(text, builder.styles["ValueStyle"]))
+            builder.story.append(Paragraph(_plain_html(order.work_done_html), builder.styles["ValueStyle"]))
         else:
             builder.story.append(Paragraph("Sin trabajo registrado.", builder.styles["ValueStyle"]))
 
         # Recomendaciones
         builder._add_section("Recomendaciones")
         if order.recommendations_html:
-            text = re.sub(r'<[^>]+>', '', order.recommendations_html)
-            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-            builder.story.append(Paragraph(text, builder.styles["ValueStyle"]))
+            builder.story.append(Paragraph(_plain_html(order.recommendations_html), builder.styles["ValueStyle"]))
         else:
             builder.story.append(Paragraph("Sin recomendaciones.", builder.styles["ValueStyle"]))
 
         # Repuestos
         if order.parts_used:
             builder._add_section("Repuestos Utilizados")
-            builder.story.append(Paragraph(order.parts_used, builder.styles["ValueStyle"]))
+            builder.story.append(Paragraph(escape(order.parts_used), builder.styles["ValueStyle"]))
 
         # Costos
         builder._add_section("Costos")
         cost_data = [
             ["Concepto", "Monto"],
-            ["Diagnóstico", f"${order.diagnostic_cost:,.2f}"],
-            ["Repuestos", f"${order.parts_cost:,.2f}"],
-            ["Mano de obra", f"${order.labor_cost:,.2f}"],
-            ["Subtotal", f"${order.total:,.2f}"],
-            ["Descuento", f"-${order.discount:,.2f}"],
-            ["Impuestos", f"${order.tax:,.2f}"],
-            ["TOTAL", f"${order.total:,.2f}"],
-            ["Anticipo", f"-${order.advance_payment:,.2f}"],
-            ["SALDO PENDIENTE", f"${order.balance:,.2f}"],
+            ["Diagnóstico", _money(order.diagnostic_cost, settings["currency"])],
+            ["Repuestos", _money(order.parts_cost, settings["currency"])],
+            ["Mano de obra", _money(order.labor_cost, settings["currency"])],
+            ["Subtotal", _money(order.total, settings["currency"])],
+            ["Descuento", f"-{_money(order.discount, settings['currency'])}"],
+            ["Impuestos", _money(order.tax, settings["currency"])],
+            ["TOTAL", _money(order.total, settings["currency"])],
+            ["Anticipo", f"-{_money(order.advance_payment, settings['currency'])}"],
+            ["SALDO PENDIENTE", _money(order.balance, settings["currency"])],
         ]
         builder.story.append(builder._build_table(
             ["Concepto", "Monto"],
@@ -419,7 +465,7 @@ class TechnicalReportPDFService:
 
         if not output_path:
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            name_slug = (customer.full_name if customer else "Cliente").replace(" ", "-")[:30]
+            name_slug = _safe_filename(customer.full_name if customer else "Cliente")
             output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Informe-Tecnico.pdf")
 
         return builder.save_to_file(output_path)

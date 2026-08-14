@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -38,16 +38,9 @@ from luciotech.database.connection import get_session
 from luciotech.database.models import Settings
 from luciotech.services.backup_service import BackupService
 from luciotech.services.settings_service import SettingsService
+from luciotech.ui.theme import THEMES, apply_theme
 
 logger = logging.getLogger(__name__)
-
-# Temas visuales
-THEMES = {
-    "Claro (sistema)": "",
-    "Oscuro (Fusion)": "fusion_dark",
-    "Claro (Fusion)": "fusion_light",
-}
-
 
 class SettingsDialog(QDialog):
     """Ventana de configuración organizada en categorías."""
@@ -366,37 +359,8 @@ class SettingsDialog(QDialog):
 
     def _apply_theme(self) -> None:
         """Aplicar el tema visual seleccionado."""
-        theme_key = self._theme_combo.currentText()
-        theme_value = THEMES.get(theme_key, "")
-
         from PyQt6.QtWidgets import QApplication
 
         app = QApplication.instance()
-        if app is None:
-            return
-
-        if theme_value == "fusion_dark":
-            app.setStyle("Fusion")
-            from PyQt6.QtGui import QPalette, QColor
-            dark_palette = QPalette()
-            dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
-            dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-            dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
-            dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-            dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
-            dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
-            dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-            dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
-            dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
-            dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-            dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-            dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
-            dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
-            app.setPalette(dark_palette)
-        elif theme_value == "fusion_light":
-            app.setStyle("Fusion")
-            app.setPalette(app.style().standardPalette())
-        else:
-            # Sistema
-            app.setStyle("")
-            app.setPalette(app.style().standardPalette())
+        if app is not None:
+            apply_theme(app, self._theme_combo.currentText())
