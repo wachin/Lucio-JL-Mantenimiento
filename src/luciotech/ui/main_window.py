@@ -29,6 +29,7 @@ from luciotech.config import APP_NAME, ORDER_STATUSES
 from luciotech.ui.pages.orders_page import OrdersPage
 from luciotech.ui.pages.reception_page import ReceptionPage
 from luciotech.ui.pages.reports_page import ReportsPage
+from luciotech.ui.pages.customers_page import CustomersPage
 from luciotech.ui.dialogs.settings_dialog import SettingsDialog
 from luciotech.services.backup_service import BackupService
 
@@ -150,13 +151,6 @@ class HomePage(PageBase):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Inicio", parent)
-
-
-class CustomersPage(PageBase):
-    """Gestión de clientes."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Clientes", parent)
 
 
 class EquipmentPage(PageBase):

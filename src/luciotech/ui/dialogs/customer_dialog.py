@@ -183,6 +183,28 @@ class CustomerSelectDialog(QDialog):
         self._btn_select.setEnabled(False)
         self._name_input.setFocus()
 
+    def start_new_customer(self) -> None:
+        """Preparar el diálogo para registrar un cliente nuevo."""
+        self.setWindowTitle("Nuevo cliente")
+        self._create_new()
+        self._btn_select.hide()
+        self._btn_save.hide()
+        self._btn_new_from_form.setText("Guardar cliente")
+
+    def edit_customer(self, customer: Customer) -> None:
+        """Preparar el diálogo para editar un cliente concreto."""
+        self.setWindowTitle(f"Editar cliente — {customer.full_name}")
+        self._list.clear()
+        item = QListWidgetItem(
+            f"{customer.full_name} — {customer.id_number or 'Sin ID'} — "
+            f"{customer.phone_primary}"
+        )
+        item.setData(Qt.ItemDataRole.UserRole, customer)
+        self._list.addItem(item)
+        self._list.setCurrentItem(item)
+        self._btn_select.hide()
+        self._btn_new_from_form.hide()
+
     def _save_customer(self) -> None:
         """Actualizar cliente existente."""
         row = self._list.currentRow()

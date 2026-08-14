@@ -64,6 +64,8 @@ class CustomerService:
             raise ValueError("El nombre del cliente es obligatorio")
         if not phone_primary.strip():
             raise ValueError("El teléfono principal es obligatorio")
+        if id_number.strip() and self.find_by_id_number(id_number.strip()):
+            raise ValueError("Ya existe un cliente con esa identificación")
 
         customer = Customer(
             full_name=full_name.strip(),
@@ -78,9 +80,25 @@ class CustomerService:
 
     def update_customer(self, customer: Customer, **kwargs) -> Customer:
         """Actualizar datos de un cliente."""
-        for key, value in kwargs.items():
-            if hasattr(customer, key):
-                setattr(customer, key, value)
+        full_name = str(kwargs.get("full_name", customer.full_name)).strip()
+        phone_primary = str(kwargs.get("phone_primary", customer.phone_primary)).strip()
+        if not full_name:
+            raise ValueError("El nombre del cliente es obligatorio")
+        if not phone_primary:
+            raise ValueError("El teléfono principal es obligatorio")
+
+        id_number = str(kwargs.get("id_number", customer.id_number) or "").strip()
+        duplicate = self.find_by_id_number(id_number) if id_number else None
+        if duplicate is not None and duplicate.id != customer.id:
+            raise ValueError("Ya existe un cliente con esa identificación")
+
+        customer.full_name = full_name
+        customer.phone_primary = phone_primary
+        customer.id_number = id_number or None
+        for key in ("phone_secondary", "email", "address", "notes"):
+            if key in kwargs:
+                value = str(kwargs[key] or "").strip()
+                setattr(customer, key, value or None)
         return self.repo.update(customer)
 
 
