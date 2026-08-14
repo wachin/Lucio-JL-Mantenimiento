@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QMainWindow,
     QStackedWidget,
@@ -22,16 +22,14 @@ from PyQt6.QtWidgets import (
     QFrame,
 )
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QAction
-
-from luciotech.config import APP_NAME, ORDER_STATUSES
+from luciotech.config import APP_NAME
 from luciotech.ui.pages.orders_page import OrdersPage
 from luciotech.ui.pages.reception_page import ReceptionPage
 from luciotech.ui.pages.reports_page import ReportsPage
 from luciotech.ui.pages.customers_page import CustomersPage
 from luciotech.ui.pages.equipment_page import EquipmentPage
 from luciotech.ui.pages.history_page import HistoryPage
+from luciotech.ui.pages.home_page import HomePage
 from luciotech.ui.dialogs.settings_dialog import SettingsDialog
 from luciotech.services.backup_service import BackupService
 
@@ -129,30 +127,6 @@ class Sidebar(QFrame):
         if self._list:
             self._list.setFixedWidth(220)
             self._collapsed = False
-
-
-class PageBase(QWidget):
-    """Página base para las secciones."""
-
-    def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        if title:
-            lbl = QLabel(title)
-            lbl.setStyleSheet("font-size: 24px; font-weight: bold; padding: 20px;")
-            layout.addWidget(lbl)
-        # Placeholder
-        placeholder = QLabel("Contenido en desarrollo")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("font-size: 16px; color: palette(mid); padding: 40px;")
-        layout.addWidget(placeholder)
-
-
-class HomePage(PageBase):
-    """Panel de inicio con tarjetas informativas."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Inicio", parent)
 
 
 class BackupsPage(QWidget):
@@ -271,7 +245,8 @@ class MainWindow(QMainWindow):
     def _setup_pages(self) -> None:
         if self._stack is None:
             return
-        self._pages["Inicio"] = HomePage()
+        self._home_page = HomePage()
+        self._pages["Inicio"] = self._home_page
         self._orders_page = OrdersPage()
         self._pages["Órdenes de servicio"] = self._orders_page
         self._reception_page = ReceptionPage()
@@ -295,6 +270,11 @@ class MainWindow(QMainWindow):
             lambda: self._on_order_opened(-1)
         )
         self._history_page.order_opened.connect(self._on_order_opened)
+        self._home_page.order_opened.connect(self._on_order_opened)
+        self._home_page.new_reception_requested.connect(
+            lambda: self._on_order_opened(-1)
+        )
+        self._home_page.orders_requested.connect(self._show_orders)
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Herramientas")
@@ -306,12 +286,14 @@ class MainWindow(QMainWindow):
         new_action = QAction("Nueva recepción", self)
         new_action.setToolTip("Crear nueva recepción (Ctrl+N)")
         new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(lambda: self._on_order_opened(-1))
         toolbar.addAction(new_action)
 
         # Acción buscar
         search_action = QAction("Buscar", self)
         search_action.setToolTip("Buscar órdenes (Ctrl+F)")
         search_action.setShortcut("Ctrl+F")
+        search_action.triggered.connect(self._show_orders_search)
         toolbar.addAction(search_action)
 
         toolbar.addSeparator()
@@ -327,6 +309,8 @@ class MainWindow(QMainWindow):
         if self._stack and section in self._pages:
             index = list(self._pages.keys()).index(section)
             self._stack.setCurrentIndex(index)
+            if section == "Inicio":
+                self._home_page.refresh()
             if section == "Historial":
                 self._history_page.refresh()
             self.statusBar().showMessage(f"Sección: {section}")
@@ -343,6 +327,9 @@ class MainWindow(QMainWindow):
             from luciotech.ui.dialogs.order_view_dialog import OrderViewDialog
             dialog = OrderViewDialog(order_id, self)
             dialog.exec()
+            self._orders_page._load_orders()
+            self._history_page.refresh()
+            self._home_page.refresh()
 
     def _on_order_created(self, order_id: int) -> None:
         """Actualizar lista de órdenes después de crear una."""
@@ -352,3 +339,18 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(idx)
         if self._sidebar:
             self._sidebar.get_list().setCurrentRow(idx)
+        self._home_page.refresh()
+        self._history_page.refresh()
+
+    def _show_orders(self) -> None:
+        """Ir al listado de órdenes."""
+        idx = list(self._pages.keys()).index("Órdenes de servicio")
+        self._stack.setCurrentIndex(idx)
+        if self._sidebar:
+            self._sidebar.get_list().setCurrentRow(idx)
+
+    def _show_orders_search(self) -> None:
+        """Abrir el listado y enfocar su buscador."""
+        self._show_orders()
+        self._orders_page._search_input.setFocus()
+        self._orders_page._search_input.selectAll()

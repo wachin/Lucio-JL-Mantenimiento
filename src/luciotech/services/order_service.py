@@ -250,8 +250,8 @@ class OrderService:
     ) -> ServiceOrder:
         """Crear una nueva orden de servicio."""
         order_number = self.generate_order_number()
-        balance = 0.0
         total = diagnostic_cost
+        balance = total - advance_payment
 
         order = ServiceOrder(
             order_number=order_number,
