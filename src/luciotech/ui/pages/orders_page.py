@@ -36,6 +36,7 @@ class OrdersPage(QWidget):
     """Página con lista avanzada de órdenes."""
 
     order_opened = pyqtSignal(int)  # order_id
+    orders_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -66,6 +67,11 @@ class OrdersPage(QWidget):
         self._btn_refresh = QPushButton("Actualizar")
         self._btn_refresh.clicked.connect(self._load_orders)
         search_layout.addWidget(self._btn_refresh)
+
+        self._chk_trash = QCheckBox("Ver papelera")
+        self._chk_trash.setToolTip("Mostrar las órdenes eliminadas")
+        self._chk_trash.toggled.connect(self._on_trash_toggled)
+        search_layout.addWidget(self._chk_trash)
 
         layout.addLayout(search_layout)
 
@@ -196,6 +202,7 @@ class OrdersPage(QWidget):
             priority=priority_filter,
             has_balance=has_balance,
             is_overdue=is_overdue,
+            deleted_only=self._chk_trash.isChecked(),
             date_from=date_from,
             date_to=date_to,
         )
@@ -210,17 +217,28 @@ class OrdersPage(QWidget):
         self._load_orders()
 
     def _load_orders(self) -> None:
-        self._orders = self._order_service.get_all()
+        self._order_service.session.expire_all()
+        if self._chk_trash.isChecked():
+            self._orders = self._order_service.get_deleted()
+        else:
+            self._orders = self._order_service.get_all()
         self._populate_table()
 
+    def _on_trash_toggled(self, checked: bool) -> None:
+        self._btn_new.setEnabled(not checked)
+        self._apply_filters()
+
     def _populate_table(self) -> None:
+        self._table.setSortingEnabled(False)
         self._table.setRowCount(0)
         for row, order in enumerate(self._orders):
             self._table.insertRow(row)
             customer = order.customer
             equipment = order.equipment
 
-            self._table.setItem(row, 0, QTableWidgetItem(order.order_number))
+            order_item = QTableWidgetItem(order.order_number)
+            order_item.setData(Qt.ItemDataRole.UserRole, order)
+            self._table.setItem(row, 0, order_item)
             self._table.setItem(row, 1, QTableWidgetItem(order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else ""))
             self._table.setItem(row, 2, QTableWidgetItem(customer.full_name if customer else ""))
             self._table.setItem(row, 3, QTableWidgetItem(customer.phone_primary if customer else ""))
@@ -242,7 +260,9 @@ class OrdersPage(QWidget):
                     if item:
                         item.setBackground(status_color)
 
-        self._count_label.setText(f"{len(self._orders)} órdenes")
+        self._table.setSortingEnabled(True)
+        location = " en la papelera" if self._chk_trash.isChecked() else ""
+        self._count_label.setText(f"{len(self._orders)} órdenes{location}")
 
     def _get_status_color(self, status: str) -> Qt.GlobalColor | None:
         """Color visual para cada estado."""
@@ -263,23 +283,34 @@ class OrdersPage(QWidget):
 
     def _on_double_click(self) -> None:
         row = self._table.currentRow()
-        if row >= 0 and row < len(self._orders):
-            order = self._orders[row]
+        order = self._order_at_row(row)
+        if order is not None:
             self.order_opened.emit(order.id)
+
+    def _order_at_row(self, row: int) -> ServiceOrder | None:
+        """Obtener la orden asociada a una fila incluso si la tabla se ordenó."""
+        if row < 0:
+            return None
+        item = self._table.item(row, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _on_context_menu(self, pos) -> None:
         row = self._table.rowAt(pos.y())
-        if row < 0 or row >= len(self._orders):
+        order = self._order_at_row(row)
+        if order is None:
             return
-        order = self._orders[row]
 
         menu = QMenu(self)
         open_action = menu.addAction("Abrir orden")
         open_action.triggered.connect(lambda: self.order_opened.emit(order.id))
 
         menu.addSeparator()
-        delete_action = menu.addAction("Eliminar (papelera)")
-        delete_action.triggered.connect(lambda: self._soft_delete(order))
+        if self._chk_trash.isChecked():
+            restore_action = menu.addAction("Restaurar orden")
+            restore_action.triggered.connect(lambda: self._restore(order))
+        else:
+            delete_action = menu.addAction("Eliminar (papelera)")
+            delete_action.triggered.connect(lambda: self._soft_delete(order))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
@@ -294,4 +325,19 @@ class OrdersPage(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self._order_service.order_repo.soft_delete(order)
             self._load_orders()
+            self.orders_changed.emit()
             logger.info("Orden eliminada (papelera): %s", order.order_number)
+
+    def _restore(self, order: ServiceOrder) -> None:
+        """Restaurar una orden eliminada."""
+        reply = QMessageBox.question(
+            self,
+            "Restaurar orden",
+            f"¿Restaurar la orden {order.order_number}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._order_service.restore(order)
+            self._load_orders()
+            self.orders_changed.emit()
+            logger.info("Orden restaurada desde la papelera: %s", order.order_number)

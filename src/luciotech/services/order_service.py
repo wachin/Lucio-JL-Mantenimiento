@@ -210,6 +210,12 @@ class OrderService:
     def get_all(self):
         return self.order_repo.get_all()
 
+    def get_deleted(self):
+        return self.order_repo.get_deleted()
+
+    def restore(self, order: ServiceOrder) -> ServiceOrder:
+        return self.order_repo.restore(order)
+
     def get_recent(self, limit: int = 20):
         return self.order_repo.get_recent(limit)
 

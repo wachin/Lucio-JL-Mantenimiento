@@ -180,6 +180,19 @@ class OrderRepo:
             query = query.filter(ServiceOrder.is_deleted == False)  # noqa: E712
         return query.order_by(ServiceOrder.created_at.desc()).all()
 
+    def get_deleted(self) -> Sequence[ServiceOrder]:
+        """Obtener las órdenes que están en la papelera."""
+        return (
+            self.session.query(ServiceOrder)
+            .options(
+                joinedload(ServiceOrder.customer),
+                joinedload(ServiceOrder.equipment),
+            )
+            .filter(ServiceOrder.is_deleted == True)  # noqa: E712
+            .order_by(ServiceOrder.deleted_at.desc())
+            .all()
+        )
+
     def search(
         self,
         query_text: str = "",
@@ -193,13 +206,14 @@ class OrderRepo:
         date_to: datetime | None = None,
         has_balance: bool = False,
         is_overdue: bool = False,
+        deleted_only: bool = False,
     ) -> Sequence[ServiceOrder]:
         """Buscar órdenes con filtros múltiples."""
         q = self.session.query(ServiceOrder).options(
             joinedload(ServiceOrder.customer),
             joinedload(ServiceOrder.equipment),
         )
-        q = q.filter(ServiceOrder.is_deleted == False)  # noqa: E712
+        q = q.filter(ServiceOrder.is_deleted == deleted_only)
 
         if query_text:
             pattern = f"%{query_text}%"
@@ -254,9 +268,20 @@ class OrderRepo:
         return order
 
     def soft_delete(self, order: ServiceOrder) -> None:
+        order = self.session.merge(order)
         order.is_deleted = True
         order.deleted_at = datetime.now()
         self.session.commit()
+
+    def restore(self, order: ServiceOrder) -> ServiceOrder:
+        """Sacar una orden de la papelera."""
+        order = self.session.merge(order)
+        order.is_deleted = False
+        order.deleted_at = None
+        order.updated_at = datetime.now()
+        self.session.commit()
+        self.session.refresh(order)
+        return order
 
     def get_recent(self, limit: int = 20) -> Sequence[ServiceOrder]:
         return (

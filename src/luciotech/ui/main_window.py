@@ -265,6 +265,8 @@ class MainWindow(QMainWindow):
 
         # Conectar señales
         self._orders_page.order_opened.connect(self._on_order_opened)
+        self._orders_page.orders_changed.connect(self._home_page.refresh)
+        self._orders_page.orders_changed.connect(self._history_page.refresh)
         self._reception_page.order_created.connect(self._on_order_created)
         self._equipment_page.new_reception_requested.connect(
             lambda: self._on_order_opened(-1)
