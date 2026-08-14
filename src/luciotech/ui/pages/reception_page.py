@@ -268,8 +268,7 @@ class ReceptionPage(QWidget):
 
     def _open_customer_dialog_new(self) -> None:
         dialog = CustomerSelectDialog(self)
-        dialog._clear_form()
-        dialog._list.clear()
+        dialog.start_new_customer()
         if dialog.exec():
             customer = dialog.get_selected_customer()
             if customer:
@@ -310,16 +309,16 @@ class ReceptionPage(QWidget):
         try:
             # Crear o actualizar cliente con datos del formulario
             customer = self._selected_customer
-            if self._cust_id.text().strip():
-                customer = self._customer_service.update_customer(
-                    customer,
-                    id_number=self._cust_id.text().strip(),
-                    phone_primary=self._cust_phone.text().strip(),
-                    phone_secondary=self._cust_phone2.text().strip() or None,
-                    email=self._cust_email.text().strip() or None,
-                    address=self._cust_address.text().strip() or None,
-                    notes=self._cust_notes.text().strip() or None,
-                )
+            customer = self._customer_service.update_customer(
+                customer,
+                full_name=customer.full_name,
+                id_number=self._cust_id.text().strip(),
+                phone_primary=self._cust_phone.text().strip(),
+                phone_secondary=self._cust_phone2.text().strip(),
+                email=self._cust_email.text().strip(),
+                address=self._cust_address.text().strip(),
+                notes=self._cust_notes.text().strip(),
+            )
 
             # Crear equipo
             equipment = self._equipment_service.create_equipment(

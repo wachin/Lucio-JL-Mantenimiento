@@ -66,6 +66,7 @@ class CustomerRepo:
         return customer
 
     def update(self, customer: Customer) -> Customer:
+        customer = self.session.merge(customer)
         customer.updated_at = datetime.now()
         self.session.commit()
         self.session.refresh(customer)
@@ -99,6 +100,7 @@ class EquipmentRepo:
         return equipment
 
     def update(self, equipment: Equipment) -> Equipment:
+        equipment = self.session.merge(equipment)
         equipment.updated_at = datetime.now()
         self.session.commit()
         self.session.refresh(equipment)
@@ -106,6 +108,39 @@ class EquipmentRepo:
 
     def get_by_customer(self, customer_id: int) -> Sequence[Equipment]:
         stmt = select(Equipment).where(Equipment.customer_id == customer_id).order_by(Equipment.created_at.desc())
+        return self.session.scalars(stmt).all()
+
+    def get_all(self) -> Sequence[Equipment]:
+        stmt = (
+            select(Equipment)
+            .options(joinedload(Equipment.customer))
+            .order_by(Equipment.created_at.desc())
+        )
+        return self.session.scalars(stmt).all()
+
+    def search(self, query: str) -> Sequence[Equipment]:
+        """Buscar equipos por sus datos o por el propietario."""
+        pattern = f"%{query}%"
+        stmt = (
+            select(Equipment)
+            .join(Equipment.customer)
+            .options(joinedload(Equipment.customer))
+            .where(Customer.is_deleted == False)  # noqa: E712
+            .where(
+                or_(
+                    Equipment.equipment_type.ilike(pattern),
+                    Equipment.brand.ilike(pattern),
+                    Equipment.model.ilike(pattern),
+                    Equipment.serial_number.ilike(pattern),
+                    Equipment.reported_problem.ilike(pattern),
+                    Customer.full_name.ilike(pattern),
+                    Customer.id_number.ilike(pattern),
+                    Customer.phone_primary.ilike(pattern),
+                )
+            )
+            .order_by(Equipment.created_at.desc())
+            .limit(100)
+        )
         return self.session.scalars(stmt).all()
 
 

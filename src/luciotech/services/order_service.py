@@ -116,6 +116,12 @@ class EquipmentService:
             return None
         return self.repo.get_by_serial(serial_number)
 
+    def get_all(self):
+        return self.repo.get_all()
+
+    def search(self, query: str):
+        return self.repo.search(query)
+
     def create_equipment(
         self,
         customer_id: int,
@@ -132,6 +138,10 @@ class EquipmentService:
         intake_notes: str = "",
     ) -> Equipment:
         """Crear un nuevo equipo."""
+        if not equipment_type.strip():
+            raise ValueError("El tipo de equipo es obligatorio")
+        if serial_number.strip() and self.find_by_serial(serial_number.strip()):
+            raise ValueError("Ya existe otro equipo con ese número de serie")
         equipment = Equipment(
             customer_id=customer_id,
             equipment_type=equipment_type,
@@ -147,6 +157,39 @@ class EquipmentService:
             intake_notes=intake_notes.strip() or None,
         )
         return self.repo.create(equipment)
+
+    def update_equipment(self, equipment: Equipment, **kwargs) -> Equipment:
+        """Actualizar los datos editables de un equipo."""
+        equipment_type = str(
+            kwargs.get("equipment_type", equipment.equipment_type)
+        ).strip()
+        if not equipment_type:
+            raise ValueError("El tipo de equipo es obligatorio")
+
+        serial_number = str(
+            kwargs.get("serial_number", equipment.serial_number) or ""
+        ).strip()
+        duplicate = self.find_by_serial(serial_number) if serial_number else None
+        if duplicate is not None and duplicate.id != equipment.id:
+            raise ValueError("Ya existe otro equipo con ese número de serie")
+
+        equipment.equipment_type = equipment_type
+        equipment.serial_number = serial_number or None
+        for key in (
+            "brand",
+            "model",
+            "color",
+            "os",
+            "password",
+            "accessories",
+            "physical_state",
+            "reported_problem",
+            "intake_notes",
+        ):
+            if key in kwargs:
+                value = str(kwargs[key] or "").strip()
+                setattr(equipment, key, value or None)
+        return self.repo.update(equipment)
 
 
 class OrderService:

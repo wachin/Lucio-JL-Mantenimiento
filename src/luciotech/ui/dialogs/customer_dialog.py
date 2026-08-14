@@ -193,13 +193,18 @@ class CustomerSelectDialog(QDialog):
 
     def edit_customer(self, customer: Customer) -> None:
         """Preparar el diálogo para editar un cliente concreto."""
-        self.setWindowTitle(f"Editar cliente — {customer.full_name}")
+        managed_customer = self._service.get_by_id(customer.id)
+        if managed_customer is None:
+            raise ValueError("El cliente ya no existe")
+
+        self.setWindowTitle(f"Editar cliente — {managed_customer.full_name}")
         self._list.clear()
         item = QListWidgetItem(
-            f"{customer.full_name} — {customer.id_number or 'Sin ID'} — "
-            f"{customer.phone_primary}"
+            f"{managed_customer.full_name} — "
+            f"{managed_customer.id_number or 'Sin ID'} — "
+            f"{managed_customer.phone_primary}"
         )
-        item.setData(Qt.ItemDataRole.UserRole, customer)
+        item.setData(Qt.ItemDataRole.UserRole, managed_customer)
         self._list.addItem(item)
         self._list.setCurrentItem(item)
         self._btn_select.hide()

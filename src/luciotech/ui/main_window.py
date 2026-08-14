@@ -30,6 +30,7 @@ from luciotech.ui.pages.orders_page import OrdersPage
 from luciotech.ui.pages.reception_page import ReceptionPage
 from luciotech.ui.pages.reports_page import ReportsPage
 from luciotech.ui.pages.customers_page import CustomersPage
+from luciotech.ui.pages.equipment_page import EquipmentPage
 from luciotech.ui.dialogs.settings_dialog import SettingsDialog
 from luciotech.services.backup_service import BackupService
 
@@ -151,13 +152,6 @@ class HomePage(PageBase):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Inicio", parent)
-
-
-class EquipmentPage(PageBase):
-    """Gestión de equipos."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Equipos", parent)
 
 
 class HistoryPage(PageBase):
@@ -289,7 +283,8 @@ class MainWindow(QMainWindow):
         self._reception_page = ReceptionPage()
         self._pages["Nueva recepción"] = self._reception_page
         self._pages["Clientes"] = CustomersPage()
-        self._pages["Equipos"] = EquipmentPage()
+        self._equipment_page = EquipmentPage()
+        self._pages["Equipos"] = self._equipment_page
         self._pages["Historial"] = HistoryPage()
         self._pages["Reportes"] = ReportsPage()
         self._pages["Copias de seguridad"] = BackupsPage()
@@ -301,6 +296,9 @@ class MainWindow(QMainWindow):
         # Conectar señales
         self._orders_page.order_opened.connect(self._on_order_opened)
         self._reception_page.order_created.connect(self._on_order_created)
+        self._equipment_page.new_reception_requested.connect(
+            lambda: self._on_order_opened(-1)
+        )
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Herramientas")
