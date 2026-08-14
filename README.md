@@ -81,9 +81,23 @@ sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs \
 
 Para lanzar el sistema
 
-```
+```bash
 python3 -m luciotech.main
 ```
+
+### Linux (paquetes del sistema — sin venv)
+
+```bash
+PYTHONPATH=src QT_LOGGING_RULES="*.debug=false;qt6ct.*=false" python3 -m luciotech.main
+```
+
+O usando el script incluido:
+
+```bash
+./run.sh
+```
+
+> **Nota:** No ejecutar con `&` (background). Qt necesita el TTY completo para el event loop.
 
 ### Windows (ejecutable)
 
