@@ -31,6 +31,7 @@ from luciotech.ui.pages.reception_page import ReceptionPage
 from luciotech.ui.pages.reports_page import ReportsPage
 from luciotech.ui.pages.customers_page import CustomersPage
 from luciotech.ui.pages.equipment_page import EquipmentPage
+from luciotech.ui.pages.history_page import HistoryPage
 from luciotech.ui.dialogs.settings_dialog import SettingsDialog
 from luciotech.services.backup_service import BackupService
 
@@ -152,13 +153,6 @@ class HomePage(PageBase):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Inicio", parent)
-
-
-class HistoryPage(PageBase):
-    """Historial."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Historial", parent)
 
 
 class BackupsPage(QWidget):
@@ -285,7 +279,8 @@ class MainWindow(QMainWindow):
         self._pages["Clientes"] = CustomersPage()
         self._equipment_page = EquipmentPage()
         self._pages["Equipos"] = self._equipment_page
-        self._pages["Historial"] = HistoryPage()
+        self._history_page = HistoryPage()
+        self._pages["Historial"] = self._history_page
         self._pages["Reportes"] = ReportsPage()
         self._pages["Copias de seguridad"] = BackupsPage()
         self._pages["Configuración"] = SettingsPage()
@@ -299,6 +294,7 @@ class MainWindow(QMainWindow):
         self._equipment_page.new_reception_requested.connect(
             lambda: self._on_order_opened(-1)
         )
+        self._history_page.order_opened.connect(self._on_order_opened)
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Herramientas")
@@ -331,6 +327,8 @@ class MainWindow(QMainWindow):
         if self._stack and section in self._pages:
             index = list(self._pages.keys()).index(section)
             self._stack.setCurrentIndex(index)
+            if section == "Historial":
+                self._history_page.refresh()
             self.statusBar().showMessage(f"Sección: {section}")
 
     def _on_order_opened(self, order_id: int) -> None:

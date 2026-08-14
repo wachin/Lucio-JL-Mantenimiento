@@ -323,6 +323,20 @@ class StatusHistoryRepo:
         stmt = select(StatusHistory).where(StatusHistory.order_id == order_id).order_by(StatusHistory.changed_at.desc())
         return self.session.scalars(stmt).all()
 
+    def get_recent(self, limit: int = 500) -> Sequence[StatusHistory]:
+        stmt = (
+            select(StatusHistory)
+            .join(StatusHistory.order)
+            .options(
+                joinedload(StatusHistory.order).joinedload(ServiceOrder.customer),
+                joinedload(StatusHistory.order).joinedload(ServiceOrder.equipment),
+            )
+            .where(ServiceOrder.is_deleted == False)  # noqa: E712
+            .order_by(StatusHistory.changed_at.desc())
+            .limit(limit)
+        )
+        return self.session.scalars(stmt).all()
+
     def create(self, record: StatusHistory) -> StatusHistory:
         self.session.add(record)
         self.session.commit()
@@ -338,6 +352,20 @@ class HistoryEventRepo:
 
     def get_by_order(self, order_id: int) -> Sequence[HistoryEvent]:
         stmt = select(HistoryEvent).where(HistoryEvent.order_id == order_id).order_by(HistoryEvent.created_at.desc())
+        return self.session.scalars(stmt).all()
+
+    def get_recent(self, limit: int = 500) -> Sequence[HistoryEvent]:
+        stmt = (
+            select(HistoryEvent)
+            .join(HistoryEvent.order)
+            .options(
+                joinedload(HistoryEvent.order).joinedload(ServiceOrder.customer),
+                joinedload(HistoryEvent.order).joinedload(ServiceOrder.equipment),
+            )
+            .where(ServiceOrder.is_deleted == False)  # noqa: E712
+            .order_by(HistoryEvent.created_at.desc())
+            .limit(limit)
+        )
         return self.session.scalars(stmt).all()
 
     def create(self, event: HistoryEvent) -> HistoryEvent:
