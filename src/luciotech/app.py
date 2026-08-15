@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 
@@ -136,13 +137,67 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     return app
 
 
+def _is_dir_writable(path: Path) -> bool:
+    """Check whether *path* (or its nearest existing ancestor) is writable."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        # Try creating a temporary file inside the directory
+        test_file = path / ".write_test"
+        test_file.write_text("test", encoding="utf-8")
+        test_file.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 def _ensure_directories() -> None:
-    """Crear directorios de datos si no existen."""
+    """Crear directorios de datos si no existen.
+
+    Si el directorio de datos principal no es escribible se muestra una
+    advertencia y se utiliza un directorio temporal como respaldo para que
+    la aplicación pueda arrancar (útil en medios de solo lectura o permisos
+    denegados).
+    """
+    data_dir = get_data_dir()
+    log_dir = get_log_dir()
+
+    if not _is_dir_writable(data_dir):
+        fallback = Path(tempfile.mkdtemp(prefix="jlmtto-"))
+        logger.warning(
+            "El directorio de datos '%s' no es escribible. "
+            "Usando directorio temporal: %s",
+            data_dir,
+            fallback,
+        )
+        try:
+            QMessageBox.warning(
+                None,
+                "Directorio de datos no disponible",
+                f"No se puede escribir en el directorio de datos:\n"
+                f"{data_dir}\n\n"
+                f"Se utilizará un directorio temporal en:\n"
+                f"{fallback}\n\n"
+                f"Los datos no se conservarán entre sesiones. "
+                f"Verifique los permisos del directorio original.",
+            )
+        except Exception:
+            pass  # Qt may not be ready; the log message is sufficient
+
+        # Monkey-patch config helpers so the rest of the app uses the fallback
+        import luciotech.config as _cfg
+
+        _fallback_data = fallback
+        _fallback_log = fallback / "logs"
+        _cfg.get_data_dir = lambda: _fallback_data  # type: ignore[assignment]
+        _cfg.get_log_dir = lambda: _fallback_log  # type: ignore[assignment]
+        data_dir = fallback
+        log_dir = fallback / "logs"
+
     dirs = [
-        get_data_dir(),
-        get_data_dir() / "attachments",
-        get_data_dir() / "backups",
-        get_log_dir(),
+        data_dir,
+        data_dir / "attachments",
+        data_dir / "backups",
+        log_dir,
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)

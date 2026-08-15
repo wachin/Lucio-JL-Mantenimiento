@@ -1,6 +1,6 @@
 # Roadmap de JL Mantenimiento
 
-Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración final (17 tareas adicionales implementadas en paralelo).
+Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración final masiva (33 tareas adicionales implementadas en paralelo).
 
 Leyenda:
 
@@ -43,7 +43,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Reinicio controlado de la conexión para pruebas aisladas.
 - [x] Migraciones Alembic reproducibles para actualizar instalaciones existentes
   (revisión `001_initial_schema` con todas las tablas del esquema actual).
-- [ ] Política de cierre explícito de sesiones de larga duración en widgets.
+- [x] Política de cierre explícito de sesiones de larga duración en widgets
+  (método `cleanup()` en páginas, llamado desde `closeEvent` en MainWindow).
 - [ ] Índices y medición de rendimiento con bases de datos grandes.
 
 ## 3. Ventana principal y navegación
@@ -90,7 +91,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Mostrar cantidad de equipos asociados.
 - [x] Integración segura entre sesiones SQLAlchemy de páginas y diálogos.
 - [x] Validar formato de teléfono (≥7 dígitos) y correo (regex básico).
-- [ ] Advertir posibles duplicados por teléfono, además de identificación.
+- [x] Advertir posibles duplicados por teléfono, además de identificación
+  (warning no bloqueante al crear/actualizar cliente).
 - [x] Ficha completa con equipos, órdenes, pagos, saldos y última visita
   (`CustomerDetailDialog` con pestañas de órdenes, equipos y pagos/saldos).
 - [x] Mostrar órdenes anteriores del cliente dentro de Nueva recepción
@@ -108,7 +110,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Tipos de equipo configurables.
 - [x] Accesorios sugeridos para los tipos principales.
 - [ ] Advertencia no bloqueante para series duplicadas cuando sea legítimo repetirlas.
-- [ ] Historial completo del equipo y sus órdenes desde la ficha.
+- [x] Historial completo del equipo y sus órdenes desde la ficha
+  (pestaña "Historial" en `EquipmentDialog` con tabla de órdenes).
 - [ ] Cifrado en reposo de contraseñas/PIN o decisión documentada sobre su alcance.
 
 ## 7. Nueva recepción
@@ -128,7 +131,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   (selección de archivos o carpeta completa, importación automática tras crear la orden).
 - [x] Pantalla de confirmación previa con resumen y número que se generará.
 - [ ] Variantes de campos/accesorios más completas por tipo de equipo.
-- [ ] Transacción atómica: revertir cliente/equipo si falla la creación final.
+- [x] Transacción atómica: revertir cliente/equipo si falla la creación final
+  (snapshot de datos + rollback de sesiones en `_save_reception`).
 
 ## 8. Órdenes de servicio
 
@@ -146,7 +150,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   (menú contextual en encabezados + persistencia en `orders_columns.json`).
 - [ ] Selección múltiple y acciones por lote.
 - [x] Exportar directamente el listado filtrado (CSV con columnas visibles).
-- [ ] Eliminación definitiva controlada desde la papelera.
+- [x] Eliminación definitiva controlada desde la papelera
+  (borrado en cascada de fotos, pagos, eventos, historial y conceptos).
 
 ## 9. Vista y edición de una orden
 
@@ -179,10 +184,10 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Limpiar formato.
 - [x] Vista previa de impresión.
 - [x] Guardar diagnóstico, trabajo realizado y recomendaciones como HTML.
-- [ ] Zoom del editor.
+- [x] Zoom del editor (Ctrl+Rueda y botones +/-, rango 50%-300%).
 - [ ] Edición avanzada de tablas.
-- [ ] Copiar imágenes insertadas al directorio de datos; hoy pueden depender de
-  su ruta original.
+- [x] Copiar imágenes insertadas al directorio de datos
+  (copia automática a `editor_images/` con nombre UUID al insertar).
 - [ ] Fidelidad completa de texto enriquecido, tablas e imágenes al exportar PDF.
 
 ## 11. Historial
@@ -196,7 +201,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Filtrar por cambios de estado, eventos o tipo de evento.
 - [x] Abrir la orden desde el historial global.
 - [ ] Auditoría detallada de cambios de campos, no solo estados y eventos manuales.
-- [ ] Edición/eliminación controlada de eventos incorrectos.
+- [x] Edición/eliminación controlada de eventos incorrectos
+  (menú contextual en el timeline con editar/eliminar).
 
 ## 12. Fotografías
 
@@ -214,7 +220,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Inclusión de fotografías en PDF.
 - [ ] Arrastrar y soltar imágenes.
 - [ ] Pegar desde el portapapeles.
-- [ ] Reordenar fotografías desde la interfaz (el repositorio ya lo permite).
+- [x] Reordenar fotografías desde la interfaz
+  (botones ⬆/⬇ en la barra de herramientas del PhotoTab).
 - [ ] Importación directa mediante MTP/GVFS y documentación del flujo desde celular.
 - [ ] Validar contenido MIME además de extensión.
 - [ ] Reportar individualmente archivos rechazados; hoy solo se registran en logs.
@@ -234,7 +241,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Controles editables y cálculo real de descuento e impuestos
   (spinboxes editables, se guardan con el presupuesto).
 - [ ] Aplicar moneda configurada en toda la UI, no solo documentos.
-- [ ] Validar sobrepagos, reembolsos y montos negativos según tipo.
+- [x] Validar sobrepagos, reembolsos y montos negativos según tipo
+  (anticipo ≤ total, abono ≤ saldo, monto > 0 obligatorio).
 - [ ] Editar o anular pagos con trazabilidad.
 - [ ] Estado de aprobación/rechazo del presupuesto.
 
@@ -251,10 +259,12 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] PDF de presupuesto (`BudgetPDFService` con tabla de conceptos, resumen y saldo).
 - [x] Comprobante de entrega (`DeliveryReceiptPDFService` con trabajo realizado,
   costos finales, garantía y firmas).
-- [ ] PDF del historial completo.
-- [ ] Condiciones del servicio configurables en comprobante.
+- [x] PDF del historial completo (`HistoryPDFService` con estados, eventos y pagos).
+- [x] Condiciones del servicio configurables en comprobante
+  (setting `service_conditions`, texto por defecto si no se configura).
 - [ ] Tamaño Carta y formato móvil 63 × 110 mm.
-- [ ] Numeración de páginas, encabezado y pie repetidos.
+- [x] Numeración de páginas, encabezado y pie repetidos
+  (estrategia de dos pasadas en `PDFBuilder.build()`, "Página X de Y").
 - [ ] Márgenes configurables.
 - [ ] Vista previa específica para cada documento antes de guardarlo.
 - [ ] Preservar tablas, imágenes y formato enriquecido en el informe técnico.
@@ -291,7 +301,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   (protección contra Zip Slip).
 - [x] Restauración transaccional: extrae a directorio temporal, verifica integridad
   y solo entonces reemplaza los datos actuales.
-- [ ] Copias automáticas y retención de las últimas N.
+- [x] Copias automáticas y retención de las últimas N
+  (`create_auto_backup()` + `schedule_auto_backup()`, retención configurable).
 - [ ] Incluir logo externo, plantillas y otros archivos configurados.
 - [x] Botón para abrir la carpeta de backups
   (`QDesktopServices.openUrl` con creación automática del directorio).
@@ -311,8 +322,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Restablecimiento general de configuración.
 - [x] Aplicar tasa de impuestos automáticamente al presupuesto
   (lee `use_tax` y `tax_rate` de configuración al cargar conceptos).
-- [ ] Catálogos administrables de estados, prioridades, accesorios, eventos,
-  métodos y tipos de pago.
+- [x] Catálogos administrables de estados, prioridades, accesorios, eventos,
+  métodos y tipos de pago (pestaña "Catálogos" con sub-pestañas para cada uno).
 - [ ] Plantillas de texto, condiciones de servicio y notas frecuentes.
 - [ ] Configuración de rutas de reportes, backups y adjuntos.
 - [x] Tamaño de fuente de la interfaz (configurable en Ajustes → Apariencia,
@@ -346,7 +357,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Validación segura contra Zip Slip al restaurar backups (`_validate_zip_paths`).
 - [x] Capturador global de excepciones con diálogo y registro
   (`sys.excepthook` + `_SafeQApplication.notify` con QMessageBox y log).
-- [ ] Manejo amable cuando el directorio de logs/datos no es escribible.
+- [x] Manejo amable cuando el directorio de logs/datos no es escribible
+  (detección + warning + directorio temporal de respaldo).
 - [ ] Validación MIME y límites contra imágenes maliciosas o enormes.
 
 ## 20. Logging y diagnóstico

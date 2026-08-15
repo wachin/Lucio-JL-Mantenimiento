@@ -264,6 +264,14 @@ class MainWindow(QMainWindow):
             logger.exception("No se pudo guardar el estado de la ventana")
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # Cerrar sesiones de base de datos de todas las páginas antes de guardar estado
+        for page in self._pages.values():
+            cleanup = getattr(page, "cleanup", None)
+            if callable(cleanup):
+                try:
+                    cleanup()
+                except Exception:
+                    logger.exception("Error en cleanup de página %s", type(page).__name__)
         self._save_state()
         super().closeEvent(event)
 

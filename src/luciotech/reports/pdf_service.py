@@ -92,6 +92,9 @@ class PDFBuilder:
         self.styles = getSampleStyleSheet()
         self._setup_styles()
         self.story: list = []
+        # Page numbering state (used by _page_number_callback)
+        self._total_pages: int | None = None
+        self._page_count: int = 0
 
     def _setup_styles(self) -> None:
         """Configurar estilos personalizados."""
@@ -262,9 +265,55 @@ class PDFBuilder:
             ]))
             self.story.append(t)
 
+    def _page_number_callback(self, canvas, doc) -> None:
+        """Dibujar 'Página X de Y' en el pie central de cada página.
+
+        Usa una estrategia de dos pasadas: la primera pasada cuenta el total
+        de páginas y la segunda las dibuja con el número correcto.
+        """
+        if self._total_pages is not None:
+            # Second pass: draw page numbers with known total
+            canvas.saveState()
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(colors.HexColor("#888888"))
+            page_text = f"Página {self._page_count} de {self._total_pages}"
+            canvas.drawCentredString(
+                self.page_size[0] / 2,
+                1.2 * cm,
+                page_text,
+            )
+            canvas.restoreState()
+            self._page_count += 1
+        # First pass: no drawing, just counting via afterPage
+
+    def _page_number_after_page(self) -> None:
+        """Contar páginas durante la primera pasada (se asigna a afterPage)."""
+        self._page_count += 1
+
     def build(self) -> bytes:
-        """Generar el PDF y retornar bytes."""
+        """Generar el PDF con numeración de páginas y retornar bytes.
+
+        Realiza dos pasadas: la primera cuenta las páginas totales y la
+        segunda dibuja el pie 'Página X de Y' en cada página.
+        """
+        # --- First pass: count total pages ---
+        self._total_pages = None
+        self._page_count = 0
         self.doc.build(self.story)
+        self._total_pages = self._page_count
+
+        # --- Second pass: render with page numbers ---
+        self.buffer = BytesIO()
+        self.doc.filename = self.buffer
+        self._page_count = 1  # pages are 1-indexed
+        self.doc.afterPage = self._page_number_after_page
+        self.doc.build(
+            self.story,
+            onFirstPage=self._page_number_callback,
+            onLaterPages=self._page_number_callback,
+        )
+        # Reset afterPage so reused builders don't carry stale state
+        self.doc.afterPage = None
         return self.buffer.getvalue()
 
     def save_to_file(self, file_path: str) -> str:
@@ -346,6 +395,17 @@ class ReceiptPDFService:
         # Fotos
         if photos:
             builder.add_photos(photos)
+
+        # Condiciones del servicio
+        settings_svc = SettingsService()
+        conditions = settings_svc.get("service_conditions", "")
+        if not conditions:
+            conditions = (
+                "El plazo de garantía comienza a partir de la fecha de entrega. "
+                "Los datos del equipo se verifican en presencia del cliente."
+            )
+        builder._add_section("Condiciones del Servicio")
+        builder.story.append(Paragraph(escape(conditions), builder.styles["ValueStyle"]))
 
         # Firmas
         builder.add_signature_lines()
@@ -662,5 +722,145 @@ class DeliveryReceiptPDFService:
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             name_slug = _safe_filename(customer.full_name if customer else "Cliente")
             output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Comprobante-Entrega.pdf")
+
+        return builder.save_to_file(output_path)
+
+
+class HistoryPDFService:
+    """Generar PDF con el historial completo de una orden."""
+
+    @staticmethod
+    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+        customer = order.customer
+        equipment = order.equipment
+        settings = _document_settings()
+        currency = settings["currency"]
+
+        builder = PDFBuilder(title=f"Historial - {order.order_number}")
+        builder.add_header(
+            settings["workshop_name"],
+            order.technician or settings["technician_name"],
+            settings["workshop_address"],
+            settings["workshop_phone"],
+            settings["workshop_email"],
+            settings["logo_path"],
+        )
+
+        builder.story.append(Paragraph("HISTORIAL COMPLETO", builder.styles["DocTitle"]))
+        builder.story.append(Spacer(1, 5 * mm))
+
+        # Datos de la orden
+        builder._add_section("Datos de la Orden")
+        builder._add_field("Nº Orden", order.order_number)
+        builder._add_field("Estado actual", order.status)
+        builder._add_field(
+            "Fecha de ingreso",
+            order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else "",
+        )
+        if customer:
+            builder._add_field("Cliente", customer.full_name)
+            if customer.phone_primary:
+                builder._add_field("Teléfono", customer.phone_primary)
+        if equipment:
+            equip_desc = f"{equipment.equipment_type} {equipment.brand or ''} {equipment.model or ''}".strip()
+            builder._add_field("Equipo", equip_desc)
+            if equipment.serial_number:
+                builder._add_field("Nº Serie", equipment.serial_number)
+
+        # Timeline de cambios de estado
+        builder._add_section("Historial de Estados")
+        status_changes = sorted(order.status_history, key=lambda s: s.changed_at)
+        if status_changes:
+            rows = []
+            for sc in status_changes:
+                rows.append([
+                    sc.changed_at.strftime("%Y-%m-%d %H:%M"),
+                    sc.previous_status,
+                    sc.new_status,
+                    sc.user or "—",
+                    sc.comment or "—",
+                ])
+            builder.story.append(builder._build_table(
+                ["Fecha/Hora", "Estado Anterior", "Estado Nuevo", "Usuario", "Comentario"],
+                rows,
+                col_widths=[3 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 5 * cm],
+            ))
+        else:
+            builder.story.append(Paragraph("Sin cambios de estado registrados.", builder.styles["ValueStyle"]))
+
+        # Timeline de eventos
+        builder._add_section("Eventos")
+        events = sorted(order.events, key=lambda e: e.created_at)
+        if events:
+            rows = []
+            for ev in events:
+                rows.append([
+                    ev.created_at.strftime("%Y-%m-%d %H:%M"),
+                    ev.event_type,
+                    ev.title,
+                    ev.user or "—",
+                    _plain_html(ev.description) if ev.description else "—",
+                ])
+            builder.story.append(builder._build_table(
+                ["Fecha/Hora", "Tipo", "Título", "Usuario", "Descripción"],
+                rows,
+                col_widths=[3 * cm, 2 * cm, 3 * cm, 2 * cm, 5.5 * cm],
+            ))
+        else:
+            builder.story.append(Paragraph("Sin eventos registrados.", builder.styles["ValueStyle"]))
+
+        # Pagos
+        builder._add_section("Pagos")
+        payments = sorted(order.payments, key=lambda p: p.payment_date)
+        if payments:
+            rows = []
+            total_paid = 0.0
+            for p in payments:
+                rows.append([
+                    p.payment_date.strftime("%Y-%m-%d %H:%M"),
+                    p.payment_type,
+                    p.payment_method,
+                    _money(p.amount, currency),
+                    p.reference or "—",
+                ])
+                total_paid += p.amount
+            rows.append(["", "", "TOTAL PAGADO", _money(total_paid, currency), ""])
+            builder.story.append(builder._build_table(
+                ["Fecha/Hora", "Tipo", "Método", "Monto", "Referencia"],
+                rows,
+                col_widths=[3 * cm, 2.5 * cm, 3 * cm, 3 * cm, 4 * cm],
+            ))
+        else:
+            builder.story.append(Paragraph("Sin pagos registrados.", builder.styles["ValueStyle"]))
+
+        # Resumen financiero
+        builder._add_section("Resumen Financiero")
+        summary_rows = [
+            ["Total", _money(order.total, currency)],
+            ["Anticipo", _money(order.advance_payment, currency)],
+            ["Pagado (registrado)", _money(sum(p.amount for p in payments), currency)],
+            ["Saldo pendiente", _money(order.balance, currency)],
+        ]
+        builder.story.append(builder._build_table(
+            ["Concepto", "Monto"],
+            summary_rows,
+            col_widths=[8 * cm, 5 * cm],
+        ))
+
+        # Pie
+        builder.story.append(Spacer(1, 10 * mm))
+        builder.story.append(Paragraph(
+            "Documento generado como respaldo del historial completo de la orden.",
+            builder.styles["FooterStyle"],
+        ))
+        builder.story.append(Paragraph(
+            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            builder.styles["FooterStyle"],
+        ))
+
+        if not output_path:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            name_slug = _safe_filename(customer.full_name if customer else "Cliente")
+            output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Historial.pdf")
 
         return builder.save_to_file(output_path)

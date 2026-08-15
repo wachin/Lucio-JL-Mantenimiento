@@ -17,6 +17,11 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QInputDialog,
     QMessageBox,
+    QMenu,
+    QDialog,
+    QFormLayout,
+    QTextEdit,
+    QDialogButtonBox,
 )
 
 from luciotech.database.models import ServiceOrder, StatusHistory, HistoryEvent
@@ -159,6 +164,14 @@ class HistoryTimeline(QWidget):
 
         layout.addLayout(left_col, 1)
 
+        # Context menu para eventos (editar / eliminar)
+        if item_type == "event":
+            frame.setProperty("_event_id", item.id)
+            frame.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            frame.customContextMenuRequested.connect(
+                lambda pos, ev=item: self._on_event_context_menu(ev, frame)
+            )
+
         return frame
 
     def _add_note(self) -> None:
@@ -201,3 +214,100 @@ class HistoryTimeline(QWidget):
             ))
             self._load_history()
             logger.info("Evento '%s' añadido a orden %s", event_type, self._order.order_number)
+
+    # ---- Context menu para eventos ----
+
+    def _on_event_context_menu(self, event: HistoryEvent, frame: QFrame) -> None:
+        """Mostrar menú contextual al hacer clic derecho sobre un evento."""
+        menu = QMenu(self)
+        edit_action = menu.addAction("✏️ Editar")
+        edit_action.triggered.connect(lambda: self._edit_event(event))
+
+        delete_action = menu.addAction("🗑️ Eliminar")
+        delete_action.triggered.connect(lambda: self._delete_event(event))
+
+        menu.exec(frame.mapToGlobal(frame.rect().center()))
+
+    def _edit_event(self, event: HistoryEvent) -> None:
+        """Abrir diálogo para editar un evento del historial."""
+        # Recargar el evento desde la sesión para tener datos frescos
+        fresh = self._session.get(HistoryEvent, event.id)
+        if fresh is None:
+            QMessageBox.warning(self, "Editar evento", "El evento ya no existe.")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Editar evento")
+        dialog.setMinimumWidth(420)
+        form = QFormLayout(dialog)
+
+        # Tipo de evento
+        type_combo = QComboBox()
+        type_combo.addItems(EVENT_TYPES)
+        idx = type_combo.findText(fresh.event_type)
+        if idx >= 0:
+            type_combo.setCurrentIndex(idx)
+        form.addRow("Tipo de evento:", type_combo)
+
+        # Título
+        title_edit = QLineEdit(fresh.title or "")
+        form.addRow("Título:", title_edit)
+
+        # Descripción
+        desc_edit = QTextEdit()
+        desc_edit.setPlainText(fresh.description or "")
+        desc_edit.setMinimumHeight(100)
+        form.addRow("Descripción:", desc_edit)
+
+        # Botones
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        new_title = title_edit.text().strip()
+        if not new_title:
+            QMessageBox.warning(self, "Editar evento", "El título no puede estar vacío.")
+            return
+
+        fresh.event_type = type_combo.currentText()
+        fresh.title = new_title
+        fresh.description = desc_edit.toPlainText().strip() or None
+
+        try:
+            self._event_repo.update(fresh)
+            self._load_history()
+            logger.info("Evento %d editado en orden %s", fresh.id, self._order.order_number)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo guardar el evento:\n{e}")
+            logger.error("Error editando evento %d: %s", fresh.id, e)
+
+    def _delete_event(self, event: HistoryEvent) -> None:
+        """Eliminar un evento del historial tras confirmación."""
+        fresh = self._session.get(HistoryEvent, event.id)
+        if fresh is None:
+            QMessageBox.warning(self, "Eliminar evento", "El evento ya no existe.")
+            self._load_history()
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Eliminar evento",
+            f"¿Eliminar el evento \"{fresh.title}\"?\n\nEsta acción no se puede deshacer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self._event_repo.delete(fresh)
+            self._load_history()
+            logger.info("Evento %d eliminado de orden %s", fresh.id, self._order.order_number)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo eliminar el evento:\n{e}")
+            logger.error("Error eliminando evento %d: %s", fresh.id, e)

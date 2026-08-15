@@ -5,7 +5,15 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from luciotech.config import DEFAULT_ORDER_FORMAT, EQUIPMENT_TYPES
+from luciotech.config import (
+    DEFAULT_ORDER_FORMAT,
+    EQUIPMENT_TYPES,
+    ORDER_STATUSES,
+    PRIORITIES,
+    EVENT_TYPES,
+    PAYMENT_METHODS,
+    PAYMENT_TYPES,
+)
 from luciotech.database.connection import get_session
 from luciotech.database.models import Settings
 
@@ -26,20 +34,47 @@ class SettingsService:
         except (TypeError, ValueError):
             return default
 
-    def get_equipment_types(self) -> list[str]:
-        raw_value = self.get("equipment_types", "")
+    # ------------------------------------------------------------------
+    # Generic JSON-list helper
+    # ------------------------------------------------------------------
+
+    def _get_json_list(self, key: str, defaults: list[str]) -> list[str]:
+        """Read a JSON-encoded list from settings, falling back to *defaults*."""
+        raw_value = self.get(key, "")
         if raw_value:
             try:
                 values = json.loads(raw_value)
                 if isinstance(values, list):
                     cleaned = list(
-                        dict.fromkeys(str(value).strip() for value in values if str(value).strip())
+                        dict.fromkeys(str(v).strip() for v in values if str(v).strip())
                     )
                     if cleaned:
                         return cleaned
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
-        return list(EQUIPMENT_TYPES)
+        return list(defaults)
+
+    # ------------------------------------------------------------------
+    # Catalog getters
+    # ------------------------------------------------------------------
+
+    def get_equipment_types(self) -> list[str]:
+        return self._get_json_list("equipment_types", EQUIPMENT_TYPES)
+
+    def get_order_statuses(self) -> list[str]:
+        return self._get_json_list("order_statuses", ORDER_STATUSES)
+
+    def get_priorities(self) -> list[str]:
+        return self._get_json_list("priorities", PRIORITIES)
+
+    def get_event_types(self) -> list[str]:
+        return self._get_json_list("event_types", EVENT_TYPES)
+
+    def get_payment_methods(self) -> list[str]:
+        return self._get_json_list("payment_methods", PAYMENT_METHODS)
+
+    def get_payment_types(self) -> list[str]:
+        return self._get_json_list("payment_types", PAYMENT_TYPES)
 
     def get_order_format(self) -> str:
         template = self.get("order_format", DEFAULT_ORDER_FORMAT).strip()

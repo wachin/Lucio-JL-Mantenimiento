@@ -329,6 +329,10 @@ class OrdersPage(QWidget):
         if self._chk_trash.isChecked():
             restore_action = menu.addAction("Restaurar orden")
             restore_action.triggered.connect(lambda: self._restore(order))
+
+            menu.addSeparator()
+            perm_delete_action = menu.addAction("🗑️ Eliminar definitivamente")
+            perm_delete_action.triggered.connect(lambda: self._permanent_delete(order))
         else:
             delete_action = menu.addAction("Eliminar (papelera)")
             delete_action.triggered.connect(lambda: self._soft_delete(order))
@@ -362,6 +366,36 @@ class OrdersPage(QWidget):
             self._load_orders()
             self.orders_changed.emit()
             logger.info("Orden restaurada desde la papelera: %s", order.order_number)
+
+    def _permanent_delete(self, order: ServiceOrder) -> None:
+        """Eliminar definitivamente una orden y todos sus datos relacionados."""
+        reply = QMessageBox.warning(
+            self,
+            "⚠️ Eliminar definitivamente",
+            f"¿Está seguro de que desea ELIMINAR DEFINITIVAMENTE la orden "
+            f"{order.order_number}?\n\n"
+            f"Se borrarán permanentemente:\n"
+            f"• Todas las fotos adjuntas\n"
+            f"• Todos los pagos registrados\n"
+            f"• Todo el historial de eventos\n"
+            f"• Todo el historial de estados\n"
+            f"• La orden completa\n\n"
+            f"⚠️ Esta acción no se puede deshacer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                self._order_service.order_repo.permanent_delete(order)
+                self._load_orders()
+                self.orders_changed.emit()
+                logger.info("Orden eliminada definitivamente: %s", order.order_number)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error al eliminar",
+                    f"No se pudo eliminar la orden:\n{e}",
+                )
+                logger.error("Error eliminando orden %s: %s", order.order_number, e)
 
     def _on_header_context_menu(self, pos) -> None:
         """Mostrar menú para toggle visibilidad de columnas."""
@@ -526,3 +560,10 @@ class OrdersPage(QWidget):
                 f"No se pudo exportar a CSV:\n{str(e)}",
             )
             logger.error("Error exportando CSV: %s", e)
+
+    def cleanup(self) -> None:
+        """Cerrar la sesión de base de datos asociada a esta página."""
+        try:
+            self._order_service.session.close()
+        except Exception:
+            logger.exception("Error cerrando sesión de OrdersPage")

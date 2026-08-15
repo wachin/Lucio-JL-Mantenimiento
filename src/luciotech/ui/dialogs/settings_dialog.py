@@ -34,6 +34,9 @@ from luciotech.config import (
     EQUIPMENT_TYPES,
     ORDER_STATUSES,
     PRIORITIES,
+    EVENT_TYPES,
+    PAYMENT_METHODS,
+    PAYMENT_TYPES,
     DEFAULT_CURRENCY,
     DEFAULT_ORDER_FORMAT,
 )
@@ -91,7 +94,7 @@ class SettingsDialog(QDialog):
         # Apariencia
         tabs.addTab(self._create_appearance_tab(), "Apariencia")
         # Catálogos
-        tabs.addTab(self._create_catalogs_tab(), "Tipos de equipo")
+        tabs.addTab(self._create_catalogs_tab(), "Catálogos")
         # Copias de seguridad
         tabs.addTab(self._create_backup_tab(), "Copias de seguridad")
         # Diagnóstico / Logs
@@ -207,58 +210,101 @@ class SettingsDialog(QDialog):
 
         return tab
 
+    # ------------------------------------------------------------------
+    # Catálogos (tipos de equipo, estados, prioridades, etc.)
+    # ------------------------------------------------------------------
+
+    # Descriptor: (settings key, display label, singular label for dialogs,
+    #              default list constant)
+    _CATALOG_DEFS: list[tuple[str, str, str, list[str]]] = [
+        ("equipment_types", "Tipos de equipo", "tipo de equipo", EQUIPMENT_TYPES),
+        ("order_statuses", "Estados de orden", "estado", ORDER_STATUSES),
+        ("priorities", "Prioridades", "prioridad", PRIORITIES),
+        ("event_types", "Tipos de evento", "tipo de evento", EVENT_TYPES),
+        ("payment_methods", "Métodos de pago", "método de pago", PAYMENT_METHODS),
+        ("payment_types", "Tipos de pago", "tipo de pago", PAYMENT_TYPES),
+    ]
+
     def _create_catalogs_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
         info = QLabel(
-            "Administre los tipos disponibles al registrar una recepción. "
-            "Los equipos ya guardados no se modifican."
+            "Administre los catálogos de la aplicación. "
+            "Los registros ya guardados no se modifican al cambiar estos valores."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
 
-        self._equipment_types = QListWidget()
-        self._equipment_types.addItems(SettingsService().get_equipment_types())
-        layout.addWidget(self._equipment_types)
+        sub_tabs = QTabWidget()
+        settings_svc = SettingsService()
 
-        buttons = QHBoxLayout()
-        add_button = QPushButton("Añadir tipo")
-        add_button.clicked.connect(self._add_equipment_type)
-        buttons.addWidget(add_button)
-        remove_button = QPushButton("Eliminar seleccionado")
-        remove_button.clicked.connect(self._remove_equipment_type)
-        buttons.addWidget(remove_button)
-        reset_button = QPushButton("Usar lista predeterminada")
-        reset_button.clicked.connect(self._reset_equipment_types)
-        buttons.addWidget(reset_button)
-        buttons.addStretch()
-        layout.addLayout(buttons)
+        # Keep references: key -> QListWidget
+        self._catalog_widgets: dict[str, QListWidget] = {}
+
+        for key, label, _singular, defaults in self._CATALOG_DEFS:
+            sub = QWidget()
+            sub_layout = QVBoxLayout(sub)
+
+            getter = getattr(settings_svc, f"get_{key}", None)
+            items = getter() if getter else defaults
+
+            list_widget = QListWidget()
+            list_widget.addItems(items)
+            self._catalog_widgets[key] = list_widget
+            sub_layout.addWidget(list_widget)
+
+            buttons = QHBoxLayout()
+            add_btn = QPushButton(f"Añadir {_singular}")
+            add_btn.clicked.connect(
+                lambda checked, lw=list_widget, k=key, s=_singular: self._add_catalog_item(lw, k, s)
+            )
+            buttons.addWidget(add_btn)
+
+            remove_btn = QPushButton("Eliminar seleccionado")
+            remove_btn.clicked.connect(
+                lambda checked, lw=list_widget: self._remove_catalog_item(lw)
+            )
+            buttons.addWidget(remove_btn)
+
+            reset_btn = QPushButton("Usar lista predeterminada")
+            reset_btn.clicked.connect(
+                lambda checked, lw=list_widget, d=defaults: self._reset_catalog_items(lw, d)
+            )
+            buttons.addWidget(reset_btn)
+
+            buttons.addStretch()
+            sub_layout.addLayout(buttons)
+            sub_tabs.addTab(sub, label)
+
+        layout.addWidget(sub_tabs)
         return tab
 
-    def _add_equipment_type(self) -> None:
+    def _add_catalog_item(self, list_widget: QListWidget, key: str, singular: str) -> None:
         value, accepted = QInputDialog.getText(
-            self, "Añadir tipo de equipo", "Nombre del tipo:"
+            self, f"Añadir {singular}", "Nombre:"
         )
         value = value.strip()
         if not accepted or not value:
             return
         existing = {
-            self._equipment_types.item(row).text().casefold()
-            for row in range(self._equipment_types.count())
+            list_widget.item(row).text().casefold()
+            for row in range(list_widget.count())
         }
         if value.casefold() in existing:
-            QMessageBox.warning(self, "Tipo duplicado", "Ese tipo de equipo ya existe.")
+            QMessageBox.warning(
+                self, "Duplicado", f"Ese {singular} ya existe en el catálogo."
+            )
             return
-        self._equipment_types.addItem(value)
+        list_widget.addItem(value)
 
-    def _remove_equipment_type(self) -> None:
-        row = self._equipment_types.currentRow()
+    def _remove_catalog_item(self, list_widget: QListWidget) -> None:
+        row = list_widget.currentRow()
         if row >= 0:
-            self._equipment_types.takeItem(row)
+            list_widget.takeItem(row)
 
-    def _reset_equipment_types(self) -> None:
-        self._equipment_types.clear()
-        self._equipment_types.addItems(EQUIPMENT_TYPES)
+    def _reset_catalog_items(self, list_widget: QListWidget, defaults: list[str]) -> None:
+        list_widget.clear()
+        list_widget.addItems(defaults)
 
     def _create_backup_tab(self) -> QWidget:
         tab = QWidget()
@@ -420,16 +466,23 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "Formato de orden inválido", str(error))
             return
 
-        equipment_types = [
-            self._equipment_types.item(row).text().strip()
-            for row in range(self._equipment_types.count())
-            if self._equipment_types.item(row).text().strip()
-        ]
-        if not equipment_types:
-            QMessageBox.warning(
-                self, "Tipos de equipo", "Debe conservar al menos un tipo de equipo."
-            )
-            return
+        # Collect all catalog values from the list widgets
+        catalog_data: dict[str, list[str]] = {}
+        for key, label, _singular, _defaults in self._CATALOG_DEFS:
+            lw = self._catalog_widgets.get(key)
+            if lw is None:
+                continue
+            items = [
+                lw.item(row).text().strip()
+                for row in range(lw.count())
+                if lw.item(row).text().strip()
+            ]
+            if not items:
+                QMessageBox.warning(
+                    self, label, f"Debe conservar al menos un elemento en {label.lower()}."
+                )
+                return
+            catalog_data[key] = items
 
         self._set_setting("workshop_name", self._workshop_name.text())
         self._set_setting("workshop_address", self._workshop_address.text())
@@ -445,7 +498,9 @@ class SettingsDialog(QDialog):
         self._set_setting("tax_rate", str(self._tax_rate.value()))
         self._set_setting("theme", self._theme_combo.currentText())
         self._set_setting("font_size", str(self._font_size_spin.value()))
-        self._set_setting("equipment_types", json.dumps(equipment_types, ensure_ascii=False))
+        # Persist all catalogs as JSON
+        for key, items in catalog_data.items():
+            self._set_setting(key, json.dumps(items, ensure_ascii=False))
 
         QMessageBox.information(self, "Guardado", "Configuración guardada exitosamente.")
         logger.info("Configuración guardada")

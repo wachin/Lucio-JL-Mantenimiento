@@ -63,6 +63,14 @@ class PhotoTab(QWidget):
         self._btn_rotate.clicked.connect(self._rotate_selected)
         toolbar.addWidget(self._btn_rotate)
 
+        self._btn_move_up = QPushButton("⬆ Subir")
+        self._btn_move_up.clicked.connect(self._move_selected_up)
+        toolbar.addWidget(self._btn_move_up)
+
+        self._btn_move_down = QPushButton("⬇ Bajar")
+        self._btn_move_down.clicked.connect(self._move_selected_down)
+        toolbar.addWidget(self._btn_move_down)
+
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
@@ -191,6 +199,40 @@ class PhotoTab(QWidget):
         for item in items:
             photo: Photo = item.data(Qt.ItemDataRole.UserRole)
             self._photo_service.rotate_photo(photo, 90)
+        self._load_photos()
+
+    def _move_selected_up(self) -> None:
+        """Mover la foto seleccionada una posición hacia arriba."""
+        current = self._list.currentItem()
+        if not current:
+            return
+        row = self._list.row(current)
+        if row <= 0:
+            return
+        self._swap_photos(row, row - 1)
+        self._list.setCurrentRow(row - 1)
+
+    def _move_selected_down(self) -> None:
+        """Mover la foto seleccionada una posición hacia abajo."""
+        current = self._list.currentItem()
+        if not current:
+            return
+        row = self._list.row(current)
+        if row >= self._list.count() - 1:
+            return
+        self._swap_photos(row, row + 1)
+        self._list.setCurrentRow(row + 1)
+
+    def _swap_photos(self, index_a: int, index_b: int) -> None:
+        """Intercambiar el sort_order de dos fotos por sus índices en la lista."""
+        if index_a == index_b:
+            return
+        photo_a: Photo = self._list.item(index_a).data(Qt.ItemDataRole.UserRole)
+        photo_b: Photo = self._list.item(index_b).data(Qt.ItemDataRole.UserRole)
+        self._photo_service.reorder_photos([
+            (photo_a.id, photo_b.sort_order),
+            (photo_b.id, photo_a.sort_order),
+        ])
         self._load_photos()
 
     def _open_full_size(self, item: QListWidgetItem) -> None:

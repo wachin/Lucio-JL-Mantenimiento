@@ -34,7 +34,7 @@ def test_create_customer(setup_test_db):
     """Prueba: creación de cliente."""
     from luciotech.services.order_service import CustomerService
     service = CustomerService()
-    customer = service.create_customer(
+    customer, warnings = service.create_customer(
         full_name="Juan Pérez",
         phone_primary="0999999999",
         id_number="1234567890",
@@ -51,6 +51,7 @@ def test_search_customer(setup_test_db):
     service = CustomerService()
     service.create_customer("Juan Pérez", "0999999999", "1234567890")
     service.create_customer("María López", "0988888888", "0987654321")
+    # create_customer now returns (customer, warnings) but we ignore the result here
 
     results = service.search("Juan")
     assert len(results) == 1
@@ -77,7 +78,7 @@ def test_create_equipment(setup_test_db):
     customer_svc = CustomerService()
     equip_svc = EquipmentService()
 
-    customer = customer_svc.create_customer("Test", "0999999999")
+    customer, _ = customer_svc.create_customer("Test", "0999999999")
     equipment = equip_svc.create_equipment(
         customer_id=customer.id,
         equipment_type="Laptop",
@@ -99,7 +100,7 @@ def test_create_order(setup_test_db):
     equip_svc = EquipmentService()
     order_svc = OrderService()
 
-    customer = customer_svc.create_customer("Ana García", "0977777777")
+    customer, _ = customer_svc.create_customer("Ana García", "0977777777")
     equipment = equip_svc.create_equipment(
         customer_id=customer.id,
         equipment_type="Laptop",
@@ -142,7 +143,7 @@ def test_change_status(setup_test_db):
     equip_svc = EquipmentService()
     order_svc = OrderService()
 
-    customer = customer_svc.create_customer("Test", "0999999999")
+    customer, _ = customer_svc.create_customer("Test", "0999999999")
     equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
     order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -168,7 +169,7 @@ def test_payment_and_balance(setup_test_db):
     equip_svc = EquipmentService()
     order_svc = OrderService()
 
-    customer = customer_svc.create_customer("Test", "0999999999")
+    customer, _ = customer_svc.create_customer("Test", "0999999999")
     equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
     order = order_svc.create_order(
         customer, equipment, datetime.now(),

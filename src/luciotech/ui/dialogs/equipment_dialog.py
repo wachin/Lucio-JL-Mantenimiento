@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHeaderView,
+    QLabel,
     QLineEdit,
     QMessageBox,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from luciotech.database.models import Equipment
+from luciotech.database.repositories import OrderRepo
+from luciotech.database.connection import get_session
 from luciotech.services.order_service import EquipmentService
 from luciotech.services.settings_service import SettingsService
 
@@ -30,19 +38,27 @@ class EquipmentEditDialog(QDialog):
         if managed_equipment is None:
             raise ValueError("El equipo ya no existe")
         self._equipment = managed_equipment
+        self._order_repo = OrderRepo(get_session())
         self._init_ui()
         self._load_equipment()
+        self._load_history()
 
     def _init_ui(self) -> None:
         self.setWindowTitle("Editar equipo")
         self.setMinimumSize(620, 680)
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+
+        # Tabs: Datos / Historial
+        tabs = QTabWidget()
+
+        # --- Pestaña: Datos del equipo ---
+        form_tab = QWidget()
+        form_layout = QFormLayout(form_tab)
 
         self._type = QComboBox()
         self._type.setEditable(True)
         self._type.addItems(SettingsService().get_equipment_types())
-        form.addRow("Tipo de equipo *:", self._type)
+        form_layout.addRow("Tipo de equipo *:", self._type)
 
         self._brand = QLineEdit()
         self._model = QLineEdit()
@@ -61,18 +77,50 @@ class EquipmentEditDialog(QDialog):
         for editor in (self._physical_state, self._reported_problem, self._intake_notes):
             editor.setMaximumHeight(85)
 
-        form.addRow("Marca:", self._brand)
-        form.addRow("Modelo:", self._model)
-        form.addRow("Número de serie:", self._serial)
-        form.addRow("Color:", self._color)
-        form.addRow("Sistema operativo:", self._os)
-        form.addRow("Contraseña/PIN:", self._password)
-        form.addRow("", self._show_password)
-        form.addRow("Accesorios:", self._accessories)
-        form.addRow("Estado físico:", self._physical_state)
-        form.addRow("Problema reportado:", self._reported_problem)
-        form.addRow("Observaciones de ingreso:", self._intake_notes)
-        layout.addLayout(form)
+        form_layout.addRow("Marca:", self._brand)
+        form_layout.addRow("Modelo:", self._model)
+        form_layout.addRow("Número de serie:", self._serial)
+        form_layout.addRow("Color:", self._color)
+        form_layout.addRow("Sistema operativo:", self._os)
+        form_layout.addRow("Contraseña/PIN:", self._password)
+        form_layout.addRow("", self._show_password)
+        form_layout.addRow("Accesorios:", self._accessories)
+        form_layout.addRow("Estado físico:", self._physical_state)
+        form_layout.addRow("Problema reportado:", self._reported_problem)
+        form_layout.addRow("Observaciones de ingreso:", self._intake_notes)
+        tabs.addTab(form_tab, "Datos del equipo")
+
+        # --- Pestaña: Historial de servicio ---
+        history_tab = QWidget()
+        history_layout = QVBoxLayout(history_tab)
+
+        self._history_label = QLabel("Órdenes de servicio para este equipo:")
+        history_layout.addWidget(self._history_label)
+
+        self._history_table = QTableWidget()
+        self._history_table.setColumnCount(5)
+        self._history_table.setHorizontalHeaderLabels(
+            ["N.º Orden", "Fecha", "Estado", "Cliente", "Problema"]
+        )
+        self._history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._history_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self._history_table.setAlternatingRowColors(True)
+        header = self._history_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        history_layout.addWidget(self._history_table)
+
+        self._no_history_label = QLabel("Sin órdenes registradas.")
+        self._no_history_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        history_layout.addWidget(self._no_history_label)
+
+        tabs.addTab(history_tab, "Historial")
+        layout.addWidget(tabs)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
@@ -101,6 +149,46 @@ class EquipmentEditDialog(QDialog):
         self._physical_state.setPlainText(equipment.physical_state or "")
         self._reported_problem.setPlainText(equipment.reported_problem or "")
         self._intake_notes.setPlainText(equipment.intake_notes or "")
+
+    def _load_history(self) -> None:
+        """Cargar el historial de órdenes de servicio del equipo."""
+        orders = self._order_repo.get_by_equipment(self._equipment.id)
+        self._history_table.setRowCount(len(orders))
+
+        if not orders:
+            self._history_table.hide()
+            self._no_history_label.show()
+            return
+
+        self._history_table.show()
+        self._no_history_label.hide()
+
+        for row, order in enumerate(orders):
+            # Número de orden
+            num_item = QTableWidgetItem(order.order_number or "")
+            num_item.setData(Qt.ItemDataRole.UserRole, order)
+            self._history_table.setItem(row, 0, num_item)
+
+            # Fecha de ingreso
+            date_str = ""
+            if order.intake_date:
+                date_str = order.intake_date.strftime("%Y-%m-%d")
+            self._history_table.setItem(row, 1, QTableWidgetItem(date_str))
+
+            # Estado
+            self._history_table.setItem(row, 2, QTableWidgetItem(order.status or ""))
+
+            # Cliente
+            customer_name = ""
+            if order.customer:
+                customer_name = order.customer.full_name or ""
+            self._history_table.setItem(row, 3, QTableWidgetItem(customer_name))
+
+            # Problema reportado
+            problem = order.reported_problem or ""
+            if len(problem) > 80:
+                problem = problem[:77] + "..."
+            self._history_table.setItem(row, 4, QTableWidgetItem(problem))
 
     def _toggle_password(self, visible: bool) -> None:
         mode = QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password

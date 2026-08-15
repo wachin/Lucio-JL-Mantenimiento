@@ -220,9 +220,15 @@ class CustomerSelectDialog(QDialog):
 
         try:
             data = self._get_form_data()
-            customer = self._service.update_customer(customer, **data)
+            customer, warnings = self._service.update_customer(customer, **data)
             self._selected_customer = customer
             QMessageBox.information(self, "Actualizado", f"Cliente {customer.full_name} actualizado.")
+            if warnings:
+                QMessageBox.warning(
+                    self,
+                    "Advertencia",
+                    "\n".join(warnings),
+                )
             self.customer_selected.emit(customer)
             self.accept()
         except ValueError as e:
@@ -232,9 +238,15 @@ class CustomerSelectDialog(QDialog):
         """Crear nuevo cliente desde el formulario."""
         try:
             data = self._get_form_data()
-            customer = self._service.create_customer(**data)
+            customer, warnings = self._service.create_customer(**data)
             self._selected_customer = customer
             QMessageBox.information(self, "Creado", f"Cliente {customer.full_name} creado exitosamente.")
+            if warnings:
+                QMessageBox.warning(
+                    self,
+                    "Advertencia",
+                    "\n".join(warnings),
+                )
             self.customer_selected.emit(customer)
             self.accept()
         except ValueError as e:

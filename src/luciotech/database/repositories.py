@@ -364,6 +364,68 @@ class OrderRepo:
             .all()
         )
 
+    def get_by_equipment(self, equipment_id: int) -> Sequence[ServiceOrder]:
+        """Obtener todas las órdenes de servicio para un equipo."""
+        return (
+            self.session.query(ServiceOrder)
+            .options(
+                joinedload(ServiceOrder.customer),
+            )
+            .filter(
+                ServiceOrder.equipment_id == equipment_id,
+                ServiceOrder.is_deleted == False,  # noqa: E712
+            )
+            .order_by(ServiceOrder.created_at.desc())
+            .all()
+        )
+
+    def permanent_delete(self, order: ServiceOrder) -> None:
+        """Eliminar definitivamente una orden y todos sus registros relacionados.
+
+        Borra fotos (y sus archivos en disco), pagos, eventos, historial de
+        estados, conceptos de presupuesto y finalmente la orden.
+        """
+        from pathlib import Path as _Path
+
+        order = self.session.merge(order)
+        order_id = order.id
+
+        # --- Fotos: borrar archivos y miniaturas del disco ---
+        photos = self.session.query(Photo).filter(Photo.order_id == order_id).all()
+        for photo in photos:
+            try:
+                fp = _Path(photo.file_path)
+                fp.unlink(missing_ok=True)
+                thumb = fp.parent / f"thumb_{fp.name}"
+                thumb.unlink(missing_ok=True)
+            except Exception:
+                pass
+            self.session.delete(photo)
+
+        # --- Pagos ---
+        payments = self.session.query(Payment).filter(Payment.order_id == order_id).all()
+        for p in payments:
+            self.session.delete(p)
+
+        # --- Eventos del historial ---
+        events = self.session.query(HistoryEvent).filter(HistoryEvent.order_id == order_id).all()
+        for e in events:
+            self.session.delete(e)
+
+        # --- Historial de estados ---
+        statuses = self.session.query(StatusHistory).filter(StatusHistory.order_id == order_id).all()
+        for s in statuses:
+            self.session.delete(s)
+
+        # --- Conceptos de presupuesto ---
+        concepts = self.session.query(BudgetConcept).filter(BudgetConcept.order_id == order_id).all()
+        for c in concepts:
+            self.session.delete(c)
+
+        # --- Orden ---
+        self.session.delete(order)
+        self.session.commit()
+
 
 class PhotoRepo:
     """Repositorio para fotografías."""
@@ -454,6 +516,19 @@ class HistoryEventRepo:
         self.session.commit()
         self.session.refresh(event)
         return event
+
+    def update(self, event: HistoryEvent) -> HistoryEvent:
+        """Actualizar un evento existente (título, descripción, tipo)."""
+        event = self.session.merge(event)
+        self.session.commit()
+        self.session.refresh(event)
+        return event
+
+    def delete(self, event: HistoryEvent) -> None:
+        """Eliminar un evento del historial."""
+        event = self.session.merge(event)
+        self.session.delete(event)
+        self.session.commit()
 
 
 class PaymentRepo:

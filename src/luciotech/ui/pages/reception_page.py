@@ -487,64 +487,102 @@ class ReceptionPage(QWidget):
             if not self._show_confirmation(order_number, customer.full_name, equipment_info, balance):
                 return
 
-            # Actualizar cliente con datos del formulario
-            customer = self._customer_service.update_customer(
-                customer,
-                full_name=customer.full_name,
-                id_number=self._cust_id.text().strip(),
-                phone_primary=self._cust_phone.text().strip(),
-                phone_secondary=self._cust_phone2.text().strip(),
-                email=self._cust_email.text().strip(),
-                address=self._cust_address.text().strip(),
-                notes=self._cust_notes.text().strip(),
-            )
+            # Snapshot original del cliente para restaurar en caso de error
+            original_customer_data = {
+                "full_name": customer.full_name,
+                "id_number": customer.id_number,
+                "phone_primary": customer.phone_primary,
+                "phone_secondary": customer.phone_secondary,
+                "email": customer.email,
+                "address": customer.address,
+                "notes": customer.notes,
+            }
 
-            # Crear equipo
-            problem = self._equip_problem.toPlainText().strip()
-            equipment = self._equipment_service.create_equipment(
-                customer_id=customer.id,
-                equipment_type=self._equip_type.currentText(),
-                brand=self._equip_brand.text(),
-                model=self._equip_model.text(),
-                serial_number=self._equip_serial.text(),
-                color=self._equip_color.text(),
-                os=self._equip_os.text(),
-                password=self._equip_password.text(),
-                accessories=self._get_accessories_text(),
-                physical_state=self._equip_physical.toPlainText(),
-                reported_problem=problem,
-                intake_notes=self._equip_notes.toPlainText(),
-            )
+            # Sesiones participantes en la transacción
+            sessions = [
+                self._customer_service.repo.session,
+                self._equipment_service.repo.session,
+                self._order_service.session,
+            ]
 
-            # Crear orden
-            intake_date = datetime(
-                self._recv_date.date().year(),
-                self._recv_date.date().month(),
-                self._recv_date.date().day(),
-                self._recv_time.time().hour(),
-                self._recv_time.time().minute(),
-            )
-
-            estimated_date = None
-            if self._recv_estimated.date().isValid() and self._recv_estimated.date().year() > 2000:
-                estimated_date = datetime(
-                    self._recv_estimated.date().year(),
-                    self._recv_estimated.date().month(),
-                    self._recv_estimated.date().day(),
+            try:
+                # Actualizar cliente con datos del formulario
+                customer, _warnings = self._customer_service.update_customer(
+                    customer,
+                    full_name=customer.full_name,
+                    id_number=self._cust_id.text().strip(),
+                    phone_primary=self._cust_phone.text().strip(),
+                    phone_secondary=self._cust_phone2.text().strip(),
+                    email=self._cust_email.text().strip(),
+                    address=self._cust_address.text().strip(),
+                    notes=self._cust_notes.text().strip(),
                 )
 
-            order = self._order_service.create_order(
-                customer=customer,
-                equipment=equipment,
-                intake_date=intake_date,
-                estimated_delivery_date=estimated_date,
-                priority=self._recv_priority.currentText(),
-                technician=self._recv_technician.text(),
-                diagnostic_cost=diag_cost,
-                advance_payment=advance,
-                status=self._recv_status.currentText(),
-                reported_problem=problem,
-            )
+                # Crear equipo
+                problem = self._equip_problem.toPlainText().strip()
+                equipment = self._equipment_service.create_equipment(
+                    customer_id=customer.id,
+                    equipment_type=self._equip_type.currentText(),
+                    brand=self._equip_brand.text(),
+                    model=self._equip_model.text(),
+                    serial_number=self._equip_serial.text(),
+                    color=self._equip_color.text(),
+                    os=self._equip_os.text(),
+                    password=self._equip_password.text(),
+                    accessories=self._get_accessories_text(),
+                    physical_state=self._equip_physical.toPlainText(),
+                    reported_problem=problem,
+                    intake_notes=self._equip_notes.toPlainText(),
+                )
+
+                # Crear orden
+                intake_date = datetime(
+                    self._recv_date.date().year(),
+                    self._recv_date.date().month(),
+                    self._recv_date.date().day(),
+                    self._recv_time.time().hour(),
+                    self._recv_time.time().minute(),
+                )
+
+                estimated_date = None
+                if self._recv_estimated.date().isValid() and self._recv_estimated.date().year() > 2000:
+                    estimated_date = datetime(
+                        self._recv_estimated.date().year(),
+                        self._recv_estimated.date().month(),
+                        self._recv_estimated.date().day(),
+                    )
+
+                order = self._order_service.create_order(
+                    customer=customer,
+                    equipment=equipment,
+                    intake_date=intake_date,
+                    estimated_delivery_date=estimated_date,
+                    priority=self._recv_priority.currentText(),
+                    technician=self._recv_technician.text(),
+                    diagnostic_cost=diag_cost,
+                    advance_payment=advance,
+                    status=self._recv_status.currentText(),
+                    reported_problem=problem,
+                )
+
+            except Exception:
+                # Rollback de todas las sesiones participantes
+                for sess in sessions:
+                    try:
+                        sess.rollback()
+                    except Exception:
+                        logger.exception("Error durante rollback de sesión")
+
+                # Restaurar valores originales en el objeto cliente en memoria
+                for key, value in original_customer_data.items():
+                    setattr(customer, key, value)
+
+                logger.exception("Error al crear recepción; transacción revertida")
+                QMessageBox.critical(
+                    self, "Error",
+                    "No se pudo crear la orden. Se revirtieron los cambios.",
+                )
+                return
 
             # Importar fotos pendientes
             self._import_pending_photos(order.id, order.order_number)
@@ -590,6 +628,28 @@ class ReceptionPage(QWidget):
             cb.setChecked(False)
         self._pending_photos.clear()
         self._update_photos_label()
+
+    def cleanup(self) -> None:
+        """Cerrar todas las sesiones de base de datos asociadas a esta página."""
+        for label, svc in [
+            ("customer_service", self._customer_service),
+            ("equipment_service", self._equipment_service),
+            ("order_service", self._order_service),
+            ("settings_service", self._settings_service),
+        ]:
+            try:
+                session = getattr(svc, "session", None) or getattr(
+                    getattr(svc, "repo", None), "session", None
+                )
+                if session is not None:
+                    session.close()
+            except Exception:
+                logger.exception("Error cerrando sesión de %s en ReceptionPage", label)
+        # OrderRepo creado con su propia sesión
+        try:
+            self._order_repo.session.close()
+        except Exception:
+            logger.exception("Error cerrando sesión de order_repo en ReceptionPage")
 
     def refresh_settings(self) -> None:
         """Aplicar catálogos y valores predeterminados recién guardados."""

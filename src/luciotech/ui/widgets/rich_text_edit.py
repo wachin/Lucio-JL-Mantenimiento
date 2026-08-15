@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+import shutil
+import uuid
+from pathlib import Path
+
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -18,9 +22,11 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QPushButton,
@@ -30,6 +36,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
+
+from luciotech.config import get_data_dir
 
 
 class RichTextToolbar(QToolBar):
@@ -128,6 +136,26 @@ class RichTextToolbar(QToolBar):
         self.addSeparator()
 
         self._add_action("🖨", "Vista previa de impresión (Ctrl+Shift+P)", self._print_preview, "Ctrl+Shift+P")
+
+        self.addSeparator()
+
+        # Zoom
+        btn_zoom_out = QPushButton("−")
+        btn_zoom_out.setToolTip("Alejar (Ctrl+Rueda)")
+        btn_zoom_out.setFixedWidth(30)
+        btn_zoom_out.clicked.connect(lambda: self._editor.zoom_out(10))
+        self.addWidget(btn_zoom_out)
+
+        self._zoom_label = QLabel("100%")
+        self._zoom_label.setMinimumWidth(45)
+        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.addWidget(self._zoom_label)
+
+        btn_zoom_in = QPushButton("+")
+        btn_zoom_in.setToolTip("Acercar (Ctrl+Rueda)")
+        btn_zoom_in.setFixedWidth(30)
+        btn_zoom_in.clicked.connect(lambda: self._editor.zoom_in(10))
+        self.addWidget(btn_zoom_in)
 
     def _add_action(self, text: str, tooltip: str, callback, shortcut: str | None = None) -> None:
         action = QAction(text, self)
@@ -259,13 +287,31 @@ class RichTextToolbar(QToolBar):
             cursor.insertHtml(html)
 
     def _insert_image(self) -> None:
-        from PyQt6.QtWidgets import QFileDialog
         path, _ = QFileDialog.getOpenFileName(
             self, "Insertar imagen", "", "Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp)"
         )
-        if path:
-            cursor = self._editor.textCursor()
-            cursor.insertHtml(f'<br><img src="{path}" max-width="400"><br>')
+        if not path:
+            return
+
+        # Copy the image to the data directory so it doesn't break when the
+        # original file is moved or deleted.
+        try:
+            img_dir = get_data_dir() / "editor_images"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            src = Path(path)
+            dest = img_dir / f"{uuid.uuid4().hex}{src.suffix}"
+            shutil.copy2(path, dest)
+            image_path = str(dest)
+        except Exception:
+            # Fall back to the original path if copying fails
+            image_path = path
+
+        cursor = self._editor.textCursor()
+        cursor.insertHtml(f'<br><img src="{image_path}" width="400"><br>')
+
+    def update_zoom_label(self, level: int) -> None:
+        """Update the zoom percentage shown in the toolbar."""
+        self._zoom_label.setText(f"{level}%")
 
     def _insert_hr(self) -> None:
         cursor = self._editor.textCursor()
@@ -372,9 +418,39 @@ class RichTextEdit(QWidget):
 
         self._editor = QTextEditWithIndent(self)
         self._toolbar = RichTextToolbar(self._editor, self)
+        self._zoom_level = 100  # percentage, range 50–300
+
+        # Connect Ctrl+wheel zoom from the inner text edit
+        self._editor.zoom_requested.connect(self._handle_zoom)
 
         layout.addWidget(self._toolbar)
         layout.addWidget(self._editor)
+
+    # ── Zoom ──────────────────────────────────────────────────────────
+
+    def _handle_zoom(self, steps: int) -> None:
+        """Handle a zoom request (each step = 10 %)."""
+        self._apply_zoom(self._zoom_level + steps * 10)
+
+    def zoom_in(self, amount: int = 10) -> None:
+        """Zoom in by *amount* percentage points."""
+        self._apply_zoom(self._zoom_level + amount)
+
+    def zoom_out(self, amount: int = 10) -> None:
+        """Zoom out by *amount* percentage points."""
+        self._apply_zoom(self._zoom_level - amount)
+
+    def _apply_zoom(self, level: int) -> None:
+        level = max(50, min(300, level))
+        if level == self._zoom_level:
+            return
+        diff = level - self._zoom_level
+        self._zoom_level = level
+        if diff > 0:
+            self._editor._inner.zoomIn(diff)
+        else:
+            self._editor._inner.zoomOut(abs(diff))
+        self._toolbar.update_zoom_label(level)
 
     def to_html(self) -> str:
         return self._editor.toHtml()
@@ -412,14 +488,27 @@ class RichTextEdit(QWidget):
 class QTextEditWithIndent(QWidget):
     """QTextEdit con soporte de sangría."""
 
+    zoom_requested = pyqtSignal(int)  # positive = zoom in, negative = zoom out
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from PyQt6.QtWidgets import QTextEdit
         self._inner = QTextEdit()
+        self._inner.installEventFilter(self)
         self._indent_width = 0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._inner)
+
+    def eventFilter(self, obj, event):
+        """Intercept Ctrl+MouseWheel on the inner QTextEdit for zoom."""
+        from PyQt6.QtCore import QEvent
+        if obj is self._inner and event.type() == QEvent.Type.Wheel:
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                delta = 1 if event.angleDelta().y() > 0 else -1
+                self.zoom_requested.emit(delta)
+                return True
+        return super().eventFilter(obj, event)
 
     def toHtml(self) -> str: return self._inner.toHtml()
     def setHtml(self, html: str) -> None: self._inner.setHtml(html)
@@ -448,3 +537,11 @@ class QTextEditWithIndent(QWidget):
     def merge_current_char_format(self, fmt):
         cursor = self._inner.textCursor()
         cursor.mergeCharFormat(fmt)
+
+    def zoom_in(self, amount: int = 10) -> None:
+        """Request zoom in; each 10 units = 1 step."""
+        self.zoom_requested.emit(max(1, amount // 10))
+
+    def zoom_out(self, amount: int = 10) -> None:
+        """Request zoom out; each 10 units = 1 step."""
+        self.zoom_requested.emit(-max(1, amount // 10))

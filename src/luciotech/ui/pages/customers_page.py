@@ -249,3 +249,10 @@ class CustomersPage(QWidget):
         dialog.edit_customer(customer)
         if dialog.exec():
             self._load_customers()
+
+    def cleanup(self) -> None:
+        """Cerrar la sesión de base de datos asociada a esta página."""
+        try:
+            self._service.repo.session.close()
+        except Exception:
+            logger.exception("Error cerrando sesión de CustomersPage")

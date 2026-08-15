@@ -351,7 +351,7 @@ class TestTrashAndRestore:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Trash Test", "0999999999")
+        customer, _ = customer_svc.create_customer("Trash Test", "0999999999")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -370,7 +370,7 @@ class TestTrashAndRestore:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Restore Test", "0988888888")
+        customer, _ = customer_svc.create_customer("Restore Test", "0988888888")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -389,7 +389,7 @@ class TestTrashAndRestore:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Search Test", "0977777777")
+        customer, _ = customer_svc.create_customer("Search Test", "0977777777")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -414,7 +414,7 @@ class TestHistory:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("History Test", "0966666666")
+        customer, _ = customer_svc.create_customer("History Test", "0966666666")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -438,7 +438,7 @@ class TestHistory:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Event Test", "0955555555")
+        customer, _ = customer_svc.create_customer("Event Test", "0955555555")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
 
@@ -459,7 +459,7 @@ class TestHistory:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Payment Event", "0944444444")
+        customer, _ = customer_svc.create_customer("Payment Event", "0944444444")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now(), diagnostic_cost=100.0)
 
@@ -479,7 +479,7 @@ class TestHistory:
         equip_svc = EquipmentService()
         order_svc = OrderService()
 
-        customer = customer_svc.create_customer("Global Hist", "0933333333")
+        customer, _ = customer_svc.create_customer("Global Hist", "0933333333")
         equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
         order = order_svc.create_order(customer, equipment, datetime.now())
         order_svc.change_status(order, "En reparación")

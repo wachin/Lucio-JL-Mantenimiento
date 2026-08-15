@@ -8,10 +8,11 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from luciotech.config import get_data_dir
+from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,68 @@ class BackupService:
                     "photo_count": 0,
                 })
         return backups
+
+    @classmethod
+    def create_auto_backup(cls) -> str:
+        """Crear copia de seguridad automática sin interacción UI.
+
+        Guarda el archivo en ``get_data_dir() / "backups"`` y aplica la
+        política de retención configurada (clave *auto_backup_retention*,
+        valor predeterminado 5).  Retorna la ruta del backup creado.
+        """
+        backup_dir = get_data_dir() / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        backup_path = cls.create_backup_to(str(backup_dir))
+
+        # Aplicar retención: borrar los más antiguos si exceden el límite
+        settings = SettingsService()
+        retention = settings.get_int("auto_backup_retention", 5)
+        if retention < 1:
+            retention = 1
+
+        backups = sorted(
+            backup_dir.glob(f"*{cls.BACKUP_EXTENSION}"),
+            key=lambda p: p.stat().st_mtime,
+        )
+        if len(backups) > retention:
+            for old_backup in backups[: len(backups) - retention]:
+                try:
+                    old_backup.unlink()
+                    logger.info("Backup antiguo eliminado (retención): %s", old_backup)
+                except OSError as exc:
+                    logger.warning("No se pudo eliminar backup antiguo %s: %s", old_backup, exc)
+
+        logger.info("Auto-backup creado: %s", backup_path)
+        return backup_path
+
+    @classmethod
+    def schedule_auto_backup(cls) -> str | None:
+        """Crear un auto-backup si el último tiene más de 24 horas.
+
+        Diseñado para invocarse al arranque de la aplicación.  Retorna la
+        ruta del backup creado o ``None`` si no fue necesario.
+        """
+        backup_dir = get_data_dir() / "backups"
+        if not backup_dir.exists():
+            return cls.create_auto_backup()
+
+        backups = sorted(
+            backup_dir.glob(f"*{cls.BACKUP_EXTENSION}"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not backups:
+            return cls.create_auto_backup()
+
+        last_backup = backups[0]
+        age = datetime.now() - datetime.fromtimestamp(last_backup.stat().st_mtime)
+        if age > timedelta(hours=24):
+            logger.info("Último backup con antigüedad de %s, creando nuevo", age)
+            return cls.create_auto_backup()
+
+        logger.debug("Auto-backup omitido, último backup hace %s", age)
+        return None
 
     @staticmethod
     def _validate_zip_paths(namelist: list[str], data_dir: Path) -> bool:

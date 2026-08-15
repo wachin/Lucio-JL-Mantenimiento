@@ -92,6 +92,27 @@ class CustomerService:
         if email:
             self._validate_email(email)
 
+    def check_duplicate_phone(self, phone: str, exclude_customer_id: int | None = None) -> str | None:
+        """Comprobar si otro cliente tiene el mismo teléfono.
+
+        Devuelve un mensaje de advertencia si se encuentra duplicado, o None.
+        """
+        if not phone:
+            return None
+        existing = self.repo.get_by_phone(phone)
+        if existing is None:
+            return None
+        if exclude_customer_id is not None and existing.id == exclude_customer_id:
+            return None
+        logger.warning(
+            "Teléfono %s ya registrado por cliente '%s' (id=%s)",
+            phone, existing.full_name, existing.id,
+        )
+        return (
+            f"El teléfono {phone} ya está registrado por otro cliente "
+            f"({existing.full_name})."
+        )
+
     def create_customer(
         self,
         full_name: str,
@@ -101,8 +122,12 @@ class CustomerService:
         email: str = "",
         address: str = "",
         notes: str = "",
-    ) -> Customer:
-        """Crear un nuevo cliente."""
+    ) -> tuple[Customer, list[str]]:
+        """Crear un nuevo cliente.
+
+        Devuelve una tupla ``(customer, warnings)`` donde *warnings* es una
+        lista de mensajes no bloqueantes (teléfono duplicado, etc.).
+        """
         if not full_name.strip():
             raise ValueError("El nombre del cliente es obligatorio")
         if not phone_primary.strip():
@@ -116,6 +141,11 @@ class CustomerService:
             email=email.strip(),
         )
 
+        warnings: list[str] = []
+        dup = self.check_duplicate_phone(phone_primary.strip())
+        if dup:
+            warnings.append(dup)
+
         customer = Customer(
             full_name=full_name.strip(),
             id_number=id_number.strip() or None,
@@ -125,10 +155,14 @@ class CustomerService:
             address=address.strip() or None,
             notes=notes.strip() or None,
         )
-        return self.repo.create(customer)
+        return self.repo.create(customer), warnings
 
-    def update_customer(self, customer: Customer, **kwargs) -> Customer:
-        """Actualizar datos de un cliente."""
+    def update_customer(self, customer: Customer, **kwargs) -> tuple[Customer, list[str]]:
+        """Actualizar datos de un cliente.
+
+        Devuelve una tupla ``(customer, warnings)`` donde *warnings* es una
+        lista de mensajes no bloqueantes (teléfono duplicado, etc.).
+        """
         full_name = str(kwargs.get("full_name", customer.full_name)).strip()
         phone_primary = str(kwargs.get("phone_primary", customer.phone_primary)).strip()
         if not full_name:
@@ -150,6 +184,11 @@ class CustomerService:
             email=email,
         )
 
+        warnings: list[str] = []
+        dup = self.check_duplicate_phone(phone_primary, exclude_customer_id=customer.id)
+        if dup:
+            warnings.append(dup)
+
         customer.full_name = full_name
         customer.phone_primary = phone_primary
         customer.id_number = id_number or None
@@ -157,7 +196,7 @@ class CustomerService:
             if key in kwargs:
                 value = str(kwargs[key] or "").strip()
                 setattr(customer, key, value or None)
-        return self.repo.update(customer)
+        return self.repo.update(customer), warnings
 
 
 class EquipmentService:
@@ -392,7 +431,52 @@ class OrderService:
         reference: str = "",
         notes: str = "",
     ) -> Payment:
-        """Registrar un pago para una orden."""
+        """Registrar un pago para una orden.
+
+        Raises:
+            ValueError: Si el monto es inválido o excede los límites permitidos
+                según el tipo de pago.
+        """
+        # --- Validaciones generales ---
+        if amount <= 0:
+            raise ValueError("El monto del pago debe ser mayor que cero")
+
+        payment_repo = PaymentRepo(self.session)
+        total_paid = payment_repo.get_total_paid(order.id)
+        current_balance = order.total - total_paid
+
+        # --- Validaciones por tipo de pago ---
+        if payment_type == "Anticipo":
+            if amount > order.total:
+                raise ValueError(
+                    f"El anticipo (${amount:.2f}) no puede exceder "
+                    f"el total de la orden (${order.total:.2f})"
+                )
+
+        elif payment_type == "Abono":
+            if amount > current_balance:
+                raise ValueError(
+                    f"El abono (${amount:.2f}) no puede exceder "
+                    f"el saldo actual (${current_balance:.2f})"
+                )
+
+        elif payment_type == "Pago final":
+            if abs(amount - current_balance) > 0.01:
+                logger.warning(
+                    "Pago final de $%.2f difiere del saldo restante $%.2f en orden %s",
+                    amount, current_balance, order.order_number,
+                )
+
+        elif payment_type == "Reembolso":
+            if amount <= 0:
+                raise ValueError("El monto del reembolso debe ser mayor que cero")
+            if amount > total_paid:
+                logger.warning(
+                    "Reembolso de $%.2f excede el total pagado ($%.2f) en orden %s",
+                    amount, total_paid, order.order_number,
+                )
+
+        # --- Registrar el pago ---
         payment = Payment(
             order_id=order.id,
             payment_type=payment_type,
@@ -401,7 +485,6 @@ class OrderService:
             reference=reference.strip() or None,
             notes=notes.strip() or None,
         )
-        payment_repo = PaymentRepo(self.session)
         payment = payment_repo.create(payment)
 
         # Recalcular saldo
