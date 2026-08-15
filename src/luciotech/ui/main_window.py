@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QCloseEvent
 from PyQt6.QtWidgets import (
     QMainWindow,
     QStackedWidget,
@@ -22,7 +24,7 @@ from PyQt6.QtWidgets import (
     QFrame,
 )
 
-from luciotech.config import APP_NAME
+from luciotech.config import APP_NAME, get_data_dir
 from luciotech.ui.pages.orders_page import OrdersPage
 from luciotech.ui.pages.reception_page import ReceptionPage
 from luciotech.ui.pages.reports_page import ReportsPage
@@ -102,6 +104,7 @@ class Sidebar(QFrame):
         for section in self.SECTIONS:
             item = QListWidgetItem(section)
             item.setSizeHint(QSize(200, 40))
+            item.setToolTip(f"Ir a {section}")
             self._list.addItem(item)
 
         self._list.currentRowChanged.connect(self._on_selection)
@@ -201,8 +204,59 @@ class MainWindow(QMainWindow):
         self._pages: dict[str, QWidget] = {}
         self._stack: QStackedWidget | None = None
         self._sidebar: Sidebar | None = None
+        self._splitter: QSplitter | None = None
         self._init_ui()
+        self._restore_state()
         logger.info("Ventana principal creada")
+
+    @staticmethod
+    def _state_file() -> Path:
+        return get_data_dir() / "window_state.json"
+
+    def _restore_state(self) -> None:
+        """Restaurar geometría, splitter y sección abierta."""
+        state_path = self._state_file()
+        if not state_path.exists():
+            return
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            geo = state.get("geometry")
+            if geo:
+                self.setGeometry(*geo)
+            sizes = state.get("splitter_sizes")
+            if sizes and self._splitter:
+                self._splitter.setSizes(sizes)
+            section = state.get("section")
+            if section and self._sidebar and self._sidebar.get_list():
+                sections = Sidebar.SECTIONS
+                if section in sections:
+                    self._sidebar.get_list().setCurrentRow(sections.index(section))
+            logger.info("Estado de ventana restaurado")
+        except Exception:
+            logger.exception("No se pudo restaurar el estado de la ventana")
+
+    def _save_state(self) -> None:
+        """Guardar geometría, splitter y sección abierta."""
+        state: dict = {}
+        geo = self.geometry()
+        state["geometry"] = [geo.x(), geo.y(), geo.width(), geo.height()]
+        if self._splitter:
+            state["splitter_sizes"] = self._splitter.sizes()
+        if self._sidebar and self._sidebar.get_list():
+            row = self._sidebar.get_list().currentRow()
+            if 0 <= row < len(Sidebar.SECTIONS):
+                state["section"] = Sidebar.SECTIONS[row]
+        try:
+            path = self._state_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            logger.info("Estado de ventana guardado")
+        except Exception:
+            logger.exception("No se pudo guardar el estado de la ventana")
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._save_state()
+        super().closeEvent(event)
 
     def _init_ui(self) -> None:
         self.setWindowTitle(APP_NAME)
@@ -210,7 +264,8 @@ class MainWindow(QMainWindow):
         self.resize(1366, 768)
 
         # Widget central con splitter
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter = self._splitter
 
         # Barra lateral
         # Crear señal dinámicamente

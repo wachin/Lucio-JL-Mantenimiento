@@ -1,6 +1,6 @@
 # Roadmap de JL Mantenimiento
 
-Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P1 (recepción completa, ficha de cliente, documentos PDF, migraciones Alembic).
+Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P2 (empaquetado, accesibilidad, persistencia visual).
 
 Leyenda:
 
@@ -58,7 +58,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Persistencia de la referencia Python de la ventana principal.
 - [ ] Conectar la acción global `Ctrl+P` a una impresión contextual válida.
 - [ ] Iconos definitivos y sistema visual consistente.
-- [ ] Recordar tamaño, posición, divisores y sección abierta.
+- [x] Recordar tamaño, posición, divisores y sección abierta
+  (`window_state.json` en el directorio de datos, guardado al cerrar).
 - [ ] Barra lateral realmente colapsable desde la interfaz.
 
 ## 4. Panel de inicio
@@ -304,7 +305,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   métodos y tipos de pago.
 - [ ] Plantillas de texto, condiciones de servicio y notas frecuentes.
 - [ ] Configuración de rutas de reportes, backups y adjuntos.
-- [ ] Tamaño de fuente de la interfaz.
+- [x] Tamaño de fuente de la interfaz (configurable en Ajustes → Apariencia,
+  se aplica al reiniciar la aplicación).
 - [ ] Validaciones de teléfono, correo e identificación configurables.
 
 ## 18. Diseño, accesibilidad y usabilidad
@@ -317,8 +319,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [ ] Revisión completa de contraste; aún existen colores fijos en algunos widgets.
 - [ ] Navegación integral solo con teclado y orden de tabulación revisado.
 - [ ] Nombres accesibles y ayudas para lector de pantalla.
-- [ ] Tamaño de fuente configurable.
-- [ ] Tooltips consistentes para todas las acciones.
+- [x] Tamaño de fuente configurable (0 = predeterminado del sistema, 8–24 pt).
+- [x] Tooltips en la barra lateral (cada sección muestra "Ir a ...").
 - [ ] Pruebas en resoluciones menores y escalado HiDPI.
 
 ## 19. Seguridad, privacidad y robustez
@@ -377,7 +379,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Eliminar archivos `__pycache__` rastreados por Git y evitar que regresen.
 - [ ] Corregir y probar el AppImage; el script actual es solo un esqueleto y su
   distribución de `src`/`PYTHONPATH` debe verificarse.
-- [ ] Actualizar hidden imports de PyInstaller con las páginas y servicios nuevos.
+- [x] Actualizar hidden imports de PyInstaller con las páginas y servicios nuevos
+  (todos los módulos de páginas, diálogos, servicios, Alembic, reportlab, matplotlib).
 - [ ] Iconos reales en tamaños requeridos.
 - [ ] Paquete `.deb`.
 - [ ] Instalador o ejecutable Windows validado sin Python instalado.
@@ -418,7 +421,17 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   `env.py`, plantilla Mako y revisión inicial `001_initial_schema`.
 - [ ] **P2 — Empaquetado real:** limpiar artefactos, completar AppImage/PyInstaller
   y probar plataformas objetivo.
+  - [x] Hidden imports de PyInstaller actualizados con todos los módulos nuevos.
+  - [x] Script de AppImage mejorado con estructura correcta y `PYTHONPATH`.
+  - [ ] Pruebas en plataformas objetivo (Debian, Ubuntu, MX Linux, Windows, macOS).
+  - [ ] Iconos reales en tamaños requeridos.
 - [ ] **P2 — Accesibilidad, traducciones y persistencia de preferencias visuales.**
+  - [x] Tamaño de fuente configurable (Ajustes → Apariencia).
+  - [x] Persistencia de geometría, splitter y sección abierta (`window_state.json`).
+  - [x] Tooltips en la barra lateral.
+  - [ ] Revisión completa de contraste y colores fijos.
+  - [ ] Navegación integral solo con teclado.
+  - [ ] Internacionalización con catálogos de traducción.
 
 ## 25. Criterio para marcar tareas futuras
 

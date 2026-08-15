@@ -44,6 +44,15 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     init_db()
     settings = SettingsService()
     apply_theme(app, settings.get("theme", "Claro (sistema)"))
+
+    # Aplicar tamaño de fuente configurado
+    font_size = settings.get_int("font_size", 0)
+    if font_size > 0:
+        from PyQt6.QtGui import QFont
+        current_font = app.font()
+        current_font.setPointSize(font_size)
+        app.setFont(current_font)
+
     window = MainWindow()
     window.show()
 

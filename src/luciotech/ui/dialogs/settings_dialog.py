@@ -190,6 +190,16 @@ class SettingsDialog(QDialog):
             self._theme_combo.setCurrentText(current_theme)
         layout.addRow("Tema visual:", self._theme_combo)
 
+        self._font_size_spin = QSpinBox()
+        self._font_size_spin.setRange(0, 24)
+        self._font_size_spin.setSpecialValueText("Predeterminado")
+        self._font_size_spin.setToolTip(
+            "Tamaño de fuente de la interfaz. 0 = predeterminado del sistema."
+        )
+        current_font_size = int(self._get("font_size", "0"))
+        self._font_size_spin.setValue(current_font_size)
+        layout.addRow("Tamaño de fuente:", self._font_size_spin)
+
         return tab
 
     def _create_catalogs_tab(self) -> QWidget:
@@ -337,6 +347,7 @@ class SettingsDialog(QDialog):
         self._set_setting("use_tax", "true" if self._use_tax.isChecked() else "false")
         self._set_setting("tax_rate", str(self._tax_rate.value()))
         self._set_setting("theme", self._theme_combo.currentText())
+        self._set_setting("font_size", str(self._font_size_spin.value()))
         self._set_setting("equipment_types", json.dumps(equipment_types, ensure_ascii=False))
 
         QMessageBox.information(self, "Guardado", "Configuración guardada exitosamente.")
