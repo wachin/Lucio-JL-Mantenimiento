@@ -56,3 +56,17 @@ def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     logger.info("Tablas creadas/verificadas")
+
+
+def reset_connection() -> None:
+    """Cerrar y olvidar el motor global.
+
+    Está pensado principalmente para pruebas y para procesos que cambien de
+    base de datos explícitamente. Las sesiones existentes no deben reutilizarse
+    después de llamar esta función.
+    """
+    global _engine, _session_factory
+    if _engine is not None:
+        _engine.dispose()
+    _session_factory = None
+    _engine = None

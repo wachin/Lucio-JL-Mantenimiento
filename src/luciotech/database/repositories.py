@@ -151,14 +151,15 @@ class OrderRepo:
         self.session = session
 
     def get_by_id(self, order_id: int) -> ServiceOrder | None:
-        return (
-            self.session.query(ServiceOrder)
+        stmt = (
+            select(ServiceOrder)
             .options(
                 joinedload(ServiceOrder.customer),
                 joinedload(ServiceOrder.equipment),
             )
-            .get(order_id)
+            .where(ServiceOrder.id == order_id)
         )
+        return self.session.scalars(stmt).first()
 
     def get_by_number(self, order_number: str) -> ServiceOrder | None:
         return (

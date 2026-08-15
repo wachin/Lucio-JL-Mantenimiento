@@ -133,6 +133,13 @@ bash packaging/build_appimage.sh
 
 > Próximamente: capturas de la interfaz en funcionamiento.
 
+## Estado del desarrollo
+
+El avance funcional y las tareas pendientes se mantienen en
+[`ROADMAP.md`](ROADMAP.md). Los agentes o colaboradores que continúen el
+desarrollo deben leer también [`AGENTS.md`](AGENTS.md), que contiene la
+arquitectura actual, comandos de validación, riesgos y prioridades.
+
 ## Estructura del proyecto
 
 ```
@@ -150,7 +157,9 @@ luciotech/
 │   ├── services/
 │   │   ├── order_service.py    # CustomerService, EquipmentService, OrderService
 │   │   ├── image_service.py    # Procesamiento de imágenes (Pillow)
-│   │   └── backup_service.py   # Copias de seguridad ZIP
+│   │   ├── backup_service.py   # Copias de seguridad ZIP
+│   │   ├── history_service.py  # Historial global unificado
+│   │   └── settings_service.py # Configuración tipada y catálogos
 │   ├── ui/
 │   │   ├── main_window.py      # QMainWindow con sidebar colapsable
 │   │   ├── pages/              # Páginas principales (órdenes, recepción, reportes)
@@ -161,7 +170,7 @@ luciotech/
 │   └── utils/
 │       └── logging_config.py   # Logging con rotación
 ├── tests/
-│   └── test_core.py            # 10 pruebas unitarias
+│   └── test_core.py            # 9 pruebas unitarias
 ├── packaging/
 │   ├── jl-mantenimiento.desktop    # Linux desktop entry
 │   ├── jl-mantenimiento.appdata.xml # AppStream metadata
@@ -171,6 +180,7 @@ luciotech/
 ├── requirements.txt
 ├── README.md
 ├── ROADMAP.md
+├── AGENTS.md
 └── LICENSE
 ```
 
@@ -189,16 +199,17 @@ luciotech/
 
 | Sistema | Ruta |
 |---|---|
-| **Linux** | `~/.local/share/lucio-jl-service-manager/` |
-| **Windows** | `%APPDATA%\lucio-jl-service-manager\` |
-| **macOS** | `~/Library/Application Support/lucio-jl-service-manager/` |
+| **Linux** | `~/.local/share/JL Mantenimiento/` |
+| **Windows** | `%LOCALAPPDATA%\LucioTech\JL Mantenimiento\` |
+| **macOS** | `~/Library/Application Support/JL Mantenimiento/` |
 
-Logs en `~/.local/state/` (Linux), `%APPDATA%\logs\` (Windows).
+Las rutas exactas se calculan con `platformdirs`. En Linux, los logs se guardan
+en `~/.local/state/JL Mantenimiento/log/`.
 
 ## Pruebas
 
 ```bash
-pytest tests/test_core.py -v
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src pytest -q
 ```
 
 | Prueba | Descripción |

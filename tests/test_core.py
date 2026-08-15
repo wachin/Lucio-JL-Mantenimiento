@@ -18,12 +18,16 @@ def setup_test_db():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_database.sqlite3"
         with patch("luciotech.config.get_db_path", return_value=db_path):
-            with patch("luciotech.config.get_data_dir", return_value=Path(tmpdir)):
-                with patch("luciotech.config.get_log_dir", return_value=Path(tmpdir) / "logs"):
-                    from luciotech.database.connection import init_db, get_session
-                    from luciotech.database.models import Base
-                    init_db()
-                    yield db_path
+            with patch("luciotech.database.connection.get_db_path", return_value=db_path):
+                with patch("luciotech.config.get_data_dir", return_value=Path(tmpdir)):
+                    with patch("luciotech.config.get_log_dir", return_value=Path(tmpdir) / "logs"):
+                        from luciotech.database.connection import init_db, reset_connection
+                        reset_connection()
+                        init_db()
+                        try:
+                            yield db_path
+                        finally:
+                            reset_connection()
 
 
 def test_create_customer(setup_test_db):

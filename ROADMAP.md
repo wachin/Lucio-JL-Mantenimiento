@@ -1,1445 +1,412 @@
-# Prompt para Codex: Sistema de recepción y reparación de equipos en PyQt6
-
-Quiero que desarrolles una aplicación de escritorio profesional en
-**Python 3 y PyQt6** para registrar el ingreso, diagnóstico, reparación
-y entrega de equipos tecnológicos recibidos por un técnico.
-
-El programa será utilizado por:
-
-**Ing. Joseph Lucio --- Servicio técnico de equipos informáticos y electrónicos**
-
-La aplicación debe funcionar en **Debian, Ubuntu, MX
-Linux y distribuciones derivadas**, su código debe estar preparado
-para poder ejecutarse también en Windows y macOS
-
-El programa debe ser moderno, estable, fácil de usar y apto para una persona que no tiene conocimientos avanzados de informática.
-
-------------------------------------------------------------------------
-
-# 1. Nombre del programa
-
-Usar como nombre:
-
-    JL Mantenimiento
-
-
-------------------------------------------------------------------------
-
-# 2. Objetivo del programa
-
-El programa debe permitir registrar el ingreso de equipos al taller,
-almacenar los datos del cliente y del equipo, documentar el diagnóstico
-y las reparaciones realizadas, adjuntar fotografías, consultar el
-historial completo e imprimir comprobantes y reportes en PDF.
-
-Debe manejar los siguientes tipos de equipos:
-
-- Laptop
-- Computadora de escritorio
-- Impresora
-- Cámara de seguridad
-- DVR
-- NVR
-- Monitor
-- Router
-- Fuente de alimentación
-- Otro
-
-La lista de tipos de equipos debe poder administrarse desde la
-configuración del programa.
-
-------------------------------------------------------------------------
-
-# 3. Tecnologías obligatorias
-
-Usar:
-
-    Python 3.11 o superior
-    PyQt6
-    SQLite
-    SQLAlchemy 2
-    Alembic
-    PyMuPDF o ReportLab para generar PDF
-    Pillow para procesar imágenes
-    matplotlib para gráficos (opcional)
-    platformdirs para rutas de aplicación multiplataforma
-    pytest para pruebas
-
-Para el editor enriquecido utilizar:
-
-    QTextEdit
-    QTextDocument
-    QTextCursor
-    QTextCharFormat
-    QTextBlockFormat
-
-No utilizar servicios externos ni requerir conexión a internet.
-
-------------------------------------------------------------------------
-
-# 4. Arquitectura del proyecto
-
-Crear una estructura modular y mantenible semejante a esta:
-
-    luciotech_service_manager/
-    ├── pyproject.toml
-    ├── README.md
-    ├── LICENSE
-    ├── requirements.txt
-    ├── src/
-    │   └── luciotech/
-    │       ├── __init__.py
-    │       ├── main.py
-    │       ├── app.py
-    │       ├── config.py
-    │       ├── database/
-    │       │   ├── connection.py
-    │       │   ├── models.py
-    │       │   ├── repositories.py
-    │       │   └── migrations/
-    │       ├── services/
-    │       │   ├── customer_service.py
-    │       │   ├── equipment_service.py
-    │       │   ├── repair_service.py
-    │       │   ├── image_service.py
-    │       │   ├── pdf_service.py
-    │       │   ├── backup_service.py
-    │       │   └── settings_service.py
-    │       ├── ui/
-    │       │   ├── main_window.py
-    │       │   ├── dialogs/
-    │       │   ├── widgets/
-    │       │   ├── pages/
-    │       │   └── resources/
-    │       ├── reports/
-    │       │   ├── templates/
-    │       │   └── styles/
-    │       ├── utils/
-    │       │   ├── validators.py
-    │       │   ├── paths.py
-    │       │   ├── dates.py
-    │       │   └── logging_config.py
-    │       └── translations/
-    ├── tests/
-    ├── packaging/
-    │   ├── debian/
-    │   └── appimage/
-    └── docs/
-
-Separar correctamente:
-
-- Interfaz gráfica
-- Acceso a datos
-- Lógica de negocio
-- Generación de documentos
-- Gestión de imágenes
-- Configuración
-- Copias de seguridad
-
-No colocar toda la aplicación en un único archivo.
-
-------------------------------------------------------------------------
-
-# 5. Base de datos
-
-Usar SQLite mediante SQLAlchemy.
-
-La base de datos debe guardarse por defecto en:
-
-    Linux:   ~/.local/share/lucio-jl-service-manager/database.sqlite3
-    Windows: %APPDATA%\lucio-jl-service-manager\database.sqlite3
-    macOS:   ~/Library/Application Support/lucio-jl-service-manager/database.sqlite3
-
-Usar `platformdirs` para obtener las rutas correctas en cada sistema
-operativo.
-
-Crear al menos las siguientes entidades.
-
-## 5.1. Clientes
-
-Campos:
-
-    id
-    nombre_completo
-    numero_identificacion
-    telefono_principal
-    telefono_secundario
-    correo_electronico
-    direccion
-    notas
-    fecha_creacion
-    fecha_actualizacion
-
-El número de identificación puede ser cédula, RUC, pasaporte u otro.
-
-## 5.2. Equipos
-
-Campos:
-
-    id
-    cliente_id
-    tipo_equipo
-    marca
-    modelo
-    numero_serie
-    color
-    sistema_operativo
-    contrasena_equipo
-    accesorios_recibidos
-    estado_fisico
-    problema_reportado_cliente
-    observaciones_ingreso
-    fecha_creacion
-    fecha_actualizacion
-
-La contraseña del equipo debe ser opcional.
-
-No debe mostrarse directamente en las listas generales. Añadir un botón
-para mostrarla u ocultarla cuando el usuario tenga abierta la ficha.
-
-## 5.3. Órdenes de servicio
-
-Campos:
-
-    id
-    numero_orden
-    cliente_id
-    equipo_id
-    fecha_ingreso
-    fecha_estimada_entrega
-    fecha_finalizacion
-    fecha_entrega
-    estado
-    prioridad
-    tecnico_responsable
-    problema_reportado
-    diagnostico_html
-    trabajo_realizado_html
-    recomendaciones_html
-    repuestos_utilizados
-    costo_diagnostico
-    costo_repuestos
-    costo_mano_obra
-    descuento
-    impuestos
-    total
-    anticipo
-    saldo_pendiente
-    garantia_dias
-    notas_internas
-    fecha_creacion
-    fecha_actualizacion
-
-El número de orden debe generarse automáticamente.
-
-Usar un formato configurable
-
-Estados disponibles:
-
-    Recibido
-    Pendiente de diagnóstico
-    Diagnosticado
-    Esperando aprobación
-    Esperando repuesto
-    En reparación
-    Reparado
-    Listo para entregar
-    Entregado
-    No reparable
-    Cancelado
-
-Prioridades:
-
-    Baja
-    Normal
-    Alta
-    Urgente
-
-## 5.4. Fotografías
-
-Campos:
-
-    id
-    orden_id
-    ruta_archivo
-    nombre_archivo
-    descripcion
-    tipo_fotografia
-    fecha_captura
-    fecha_creacion
-    orden_visualizacion
-
-Tipos de fotografía:
-
-    Estado al recibir
-    Número de serie
-    Accesorios
-    Daño físico
-    Proceso de reparación
-    Equipo reparado
-    Otro
-
-## 5.5. Historial de estados
-
-Campos:
-
-    id
-    orden_id
-    estado_anterior
-    estado_nuevo
-    comentario
-    fecha
-    usuario
-
-Cada vez que cambie el estado de una orden debe crearse automáticamente
-un registro en el historial.
-
-## 5.6. Eventos o notas del historial
-
-Campos:
-
-    id
-    orden_id
-    tipo_evento
-    titulo
-    descripcion
-    fecha
-    usuario
-
-Ejemplos de eventos:
-
-    Llamada al cliente
-    Mensaje enviado
-    Presupuesto aprobado
-    Presupuesto rechazado
-    Repuesto solicitado
-    Repuesto recibido
-    Diagnóstico actualizado
-    Pago recibido
-    Equipo entregado
-    Nota interna
-
-## 5.7. Pagos
-
-Campos:
-
-    id
-    orden_id
-    fecha
-    tipo_pago
-    metodo_pago
-    monto
-    referencia
-    observaciones
-
-Tipos de pago:
-
-    Anticipo
-    Abono
-    Pago final
-    Reembolso
-
-Métodos:
-
-    Efectivo
-    Transferencia bancaria
-    Tarjeta
-    Depósito
-    Otro
-
-## 5.8. Configuración
-
-Guardar:
-
-    nombre_taller
-    nombre_tecnico
-    numero_identificacion
-    telefono
-    correo
-    direccion
-    logo
-    moneda
-    formato_numero_orden
-    texto_pie_reporte
-    condiciones_servicio
-    ruta_copias_seguridad
-    tema_visual
-    idioma
-
-Usar como moneda predeterminada:
-
-    USD
-
-------------------------------------------------------------------------
-
-# 6. Ventana principal
-
-Crear una interfaz moderna utilizando:
-
-    QMainWindow
-    QStackedWidget
-    QToolBar
-    QStatusBar
-    QSplitter
-
-La ventana principal debe tener una barra lateral con estas secciones:
-
-    Inicio
-    Órdenes de servicio
-    Nueva recepción
-    Clientes
-    Equipos
-    Historial
-    Reportes
-    Copias de seguridad
-    Configuración
-
-La barra lateral debe poder contraerse para mostrar solamente los
-iconos.
-
-Agregar iconos mediante recursos Qt o iconos SVG incluidos en el
-proyecto.
-
-------------------------------------------------------------------------
-
-# 7. Panel de inicio
-
-El panel principal debe mostrar tarjetas informativas:
-
-- Equipos recibidos hoy
-- Pendientes de diagnóstico
-- En reparación
-- Esperando aprobación
-- Listos para entregar
-- Equipos entregados durante el mes
-- Saldo pendiente por cobrar
-- Ingresos del mes
-
-También debe mostrar:
-
-- Últimas órdenes creadas
-- Equipos con entrega estimada próxima
-- Órdenes atrasadas
-- Actividad reciente
-
-Las tarjetas deben ser clicables para abrir la lista filtrada
-correspondiente.
-
-------------------------------------------------------------------------
-
-# 8. Formulario de nueva recepción
-
-Crear un asistente o formulario organizado por secciones.
-
-## 8.1. Datos del cliente
-
-Campos:
-
-    Nombre completo
-    Cédula, RUC o identificación
-    Teléfono principal
-    Teléfono secundario
-    Correo electrónico
-    Dirección
-    Observaciones
-
-Permitir:
-
-- Buscar un cliente ya registrado.
-- Autocompletar sus datos.
-- Crear un cliente nuevo sin abandonar el formulario.
-- Mostrar órdenes anteriores del cliente.
-- Evitar duplicados por identificación o teléfono, mostrando una
-  advertencia.
-
-## 8.2. Datos del equipo
-
-Campos:
-
-    Tipo de equipo
-    Marca
-    Modelo
-    Número de serie
-    Color
-    Sistema operativo
-    Contraseña o PIN
-    Accesorios recibidos
-    Estado físico del equipo
-    Problema reportado por el cliente
-    Observaciones de ingreso
-
-Agregar casillas rápidas para accesorios comunes:
-
-### Laptop
-
-    Cargador
-    Batería
-    Bolso
-    Mouse
-    Adaptador
-    Memoria USB
-    Otro
-
-### Computadora de escritorio
-
-    Cable de corriente
-    Monitor
-    Teclado
-    Mouse
-    Parlantes
-    Adaptador Wi-Fi
-    Otro
-
-### Impresora
-
-    Cable de corriente
-    Cable USB
-    Cartuchos
-    Botellas de tinta
-    Bandejas
-    Otro
-
-### Cámaras y sistemas de seguridad
-
-    Fuente de alimentación
-    Adaptador
-    Cable
-    Disco duro
-    Control remoto
-    Mouse
-    Antena
-    Otro
-
-Permitir escribir accesorios adicionales manualmente.
-
-## 8.3. Recepción
-
-Campos:
-
-    Fecha y hora de ingreso
-    Fecha estimada de entrega
-    Prioridad
-    Técnico responsable
-    Costo inicial de diagnóstico
-    Anticipo recibido
-    Estado inicial
-
-La fecha y hora de ingreso deben completarse automáticamente, pero deben
-poder editarse.
-
-## 8.4. Fotografías
-
-Permitir:
-
-- Seleccionar una o varias fotografías desde el disco.
-- Arrastrar y soltar imágenes.
-- Pegar una imagen desde el portapapeles.
-- Cargar fotografías enviadas desde un celular mediante:
-  - Carpeta compartida en red local (SMB).
-  - Carpeta de sincronización (el usuario copia las fotos desde su celular por cable USB o Bluetooth).
-  - Escaneo de código QR que muestre instrucciones para enviar fotos.
-- Ver miniaturas.
-- Abrir la fotografía en tamaño completo.
-- Rotar la fotografía.
-- Cambiar su descripción.
-- Clasificar el tipo de fotografía.
-- Eliminarla de la orden.
-- Reordenar las fotografías.
-
-Formatos aceptados:
-
-    JPEG
-    PNG
-    WEBP
-    BMP
-
-Al importar fotografías:
-
-- Crear una copia dentro del directorio de datos del programa.
-- No depender de la ubicación original.
-- Generar miniaturas.
-- Conservar el archivo original cuando sea posible.
-- Evitar nombres duplicados mediante UUID.
-- Corregir automáticamente la orientación EXIF.
-- Comprimir opcionalmente imágenes demasiado grandes.
-
-Ruta sugerida:
-
-    Linux:   ~/.local/share/lucio-jl-service-manager/attachments/<numero_orden>/
-    Windows: %APPDATA%\lucio-jl-service-manager\attachments\<numero_orden>\
-    macOS:   ~/Library/Application Support/lucio-jl-service-manager/attachments/<numero_orden>/
-
-## 8.5. Confirmación
-
-Antes de guardar, mostrar un resumen con:
-
-- Cliente
-- Equipo
-- Problema reportado
-- Accesorios
-- Estado físico
-- Fotografías
-- Fecha de ingreso
-- Anticipo
-- Número de orden que se generará
-
-Después de guardar, ofrecer:
-
-    Abrir orden
-    Imprimir comprobante
-    Exportar PDF
-    Crear otra recepción
-
-------------------------------------------------------------------------
-
-# 9. Editor de diagnóstico tipo Word
-
-El diagnóstico debe escribirse en un editor enriquecido basado en
-`QTextEdit`.
-
-Crear una barra de herramientas con:
-
-- Tipo de letra
-- Tamaño de letra
-- Negrita
-- Cursiva
-- Subrayado
-- Tachado
-- Color del texto
-- Color de fondo
-- Alineación izquierda
-- Centrar
-- Alineación derecha
-- Justificar
-- Lista con viñetas
-- Lista numerada
-- Aumentar sangría
-- Disminuir sangría
-- Deshacer
-- Rehacer
-- Cortar
-- Copiar
-- Pegar
-- Pegar como texto sin formato
-- Insertar tabla
-- Insertar imagen
-- Insertar línea horizontal
-- Limpiar formato
-- Buscar y reemplazar
-- Zoom
-- Vista previa de impresión
-
-El contenido debe almacenarse en HTML limpio y compatible con
-`QTextDocument`.
-
-Crear editores separados para:
-
-    Diagnóstico técnico
-    Trabajo realizado
-    Recomendaciones al cliente
-
-El editor debe permitir añadir textos predefinidos, por ejemplo:
-
-    Se realizó inspección visual del equipo.
-    Se realizaron pruebas de encendido.
-    Se verificó el estado del almacenamiento.
-    Se verificó la memoria RAM.
-    Se recomienda realizar mantenimiento preventivo.
-    Se recomienda reemplazar el componente defectuoso.
-    El equipo fue probado y funciona correctamente.
-
-Las plantillas de texto deben poder administrarse desde Configuración.
-
-------------------------------------------------------------------------
-
-# 10. Vista de una orden
-
-La ficha de una orden debe mostrar pestañas:
-
-    Resumen
-    Cliente
-    Equipo
-    Diagnóstico
-    Reparación
-    Fotografías
-    Presupuesto y pagos
-    Historial
-    Documentos
-
-## Resumen
-
-Mostrar:
-
-- Número de orden
-- Estado
-- Prioridad
-- Cliente
-- Teléfono
-- Equipo
-- Marca
-- Modelo
-- Número de serie
-- Fecha de ingreso
-- Fecha estimada
-- Saldo pendiente
-- Técnico responsable
-
-Incluir botones rápidos:
-
-    Editar
-    Cambiar estado
-    Añadir nota
-    Registrar pago
-    Añadir fotografías
-    Generar PDF
-    Imprimir
-    Marcar como entregado
-
-## Historial
-
-Mostrar una línea de tiempo cronológica con:
-
-- Fecha y hora
-- Tipo de evento
-- Estado
-- Usuario
-- Comentario
-- Cambios realizados
-
-No borrar los eventos históricos cuando se edite la orden.
-
-------------------------------------------------------------------------
-
-# 11. Lista de órdenes
-
-Crear una tabla avanzada con las columnas:
-
-    Número de orden
-    Fecha de ingreso
-    Cliente
-    Teléfono
-    Tipo de equipo
-    Marca y modelo
-    Número de serie
-    Problema reportado
-    Estado
-    Prioridad
-    Fecha estimada
-    Total
-    Saldo
-
-Permitir:
-
-- Ordenar columnas.
-- Ocultar o mostrar columnas.
-- Cambiar el ancho.
-- Guardar la configuración de la tabla.
-- Abrir una orden con doble clic.
-- Menú contextual.
-- Exportar resultados.
-- Imprimir la lista.
-- Selección múltiple.
-
-Añadir filtros:
-
-    Texto libre
-    Número de orden
-    Cliente
-    Teléfono
-    Tipo de equipo
-    Marca
-    Número de serie
-    Estado
-    Prioridad
-    Técnico
-    Rango de fechas
-    Con saldo pendiente
-    Con retraso
-
-La búsqueda debe ejecutarse al escribir, con un pequeño retraso para
-evitar consultas excesivas.
-
-------------------------------------------------------------------------
-
-# 12. Clientes e historial
-
-La ficha de cada cliente debe mostrar:
-
-- Datos personales
-- Equipos registrados
-- Órdenes anteriores
-- Equipos actualmente en reparación
-- Pagos realizados
-- Saldo pendiente
-- Notas
-- Fecha de última visita
-
-Permitir abrir cualquier orden anterior.
-
-Agregar una opción para generar un reporte PDF con el historial completo
-del cliente.
-
-------------------------------------------------------------------------
-
-# 13. Presupuestos y costos
-
-Permitir añadir conceptos individuales:
-
-    Diagnóstico
-    Mano de obra
-    Repuesto
-    Accesorio
-    Servicio
-    Otro
-
-Cada concepto debe contener:
-
-    Descripción
-    Cantidad
-    Precio unitario
-    Subtotal
-
-Calcular automáticamente:
-
-    Subtotal
-    Descuento
-    Impuestos
-    Total
-    Anticipo
-    Pagos realizados
-    Saldo pendiente
-
-Permitir configurar si el taller utiliza impuestos.
-
-Para Ecuador, permitir configurar el IVA, pero no fijar permanentemente
-un porcentaje en el código. Debe ser un valor editable desde
-Configuración.
-
-------------------------------------------------------------------------
-
-# 14. Generación de PDF
-
-El programa debe generar documentos PDF profesionales.
-
-Crear al menos estos tipos:
-
-## 14.1. Comprobante de recepción
-
-Debe incluir:
-
-- Logo del taller
-- Nombre del taller
-- Nombre del técnico
-- Dirección
-- Teléfono
-- Correo
-- Número de orden
-- Fecha y hora de ingreso
-- Datos del cliente
-- Datos del equipo
-- Número de serie
-- Problema reportado
-- Estado físico
-- Accesorios recibidos
-- Fotografías seleccionadas
-- Anticipo
-- Saldo
-- Fecha estimada de entrega
-- Condiciones del servicio
-- Espacio para firma del cliente
-- Espacio para firma del técnico
-
-## 14.2. Informe técnico
-
-Debe incluir:
-
-- Datos del taller
-- Datos del cliente
-- Datos del equipo
-- Problema reportado
-- Diagnóstico técnico
-- Trabajo realizado
-- Repuestos utilizados
-- Recomendaciones
-- Fotografías del antes y después
-- Costos
-- Garantía
-- Firmas
-
-## 14.3. Presupuesto
-
-Debe incluir:
-
-- Lista de conceptos
-- Cantidades
-- Precios
-- Subtotales
-- Impuestos
-- Total
-- Vigencia del presupuesto
-- Espacio para aprobación del cliente
-
-## 14.4. Comprobante de entrega
-
-Debe incluir:
-
-- Datos de la orden
-- Trabajo realizado
-- Estado final
-- Pagos
-- Saldo
-- Garantía
-- Fecha de entrega
-- Declaración de conformidad
-- Firma del cliente
-- Firma del técnico
-
-## 14.5. Historial completo
-
-Debe contener todos los eventos de la orden en orden cronológico.
-
-Los PDF deben:
-
-- Tener tamaño A4 por defecto.
-- Permitir elegir tamaño Carta.
-- permitir elegir además tamaño para pantallas de celular 63x110 mm para los clientes que quieran leer el reporte en sus celulares
-- Incluir números de página.
-- Permitir vista previa.
-- Permitir guardar como archivo.
-- Permitir enviar directamente a la impresora.
-- Dividir correctamente el contenido entre páginas.
-- Respetar texto enriquecido, tablas e imágenes.
-- Evitar imágenes deformadas.
-- Incluir encabezado y pie de página.
-- Usar márgenes configurables.
-
-El nombre del archivo debe ser descriptivo, con le fecha y hora, un nombre y un apellido, por ejemplo:
-
-    20260801-153701_Juan-Perez_Informe-Tecnico.docx
-
-------------------------------------------------------------------------
-
-# 15. Impresión
-
-Implementar impresión usando:
-
-    QPrinter
-    QPrintDialog
-    QPrintPreviewDialog
-    QPageLayout
-    QPageSize
-
-Permitir:
-
-- Seleccionar impresora.
-- Elegir orientación.
-- Elegir tamaño de papel.
-- Establecer márgenes.
-- Imprimir todas las páginas.
-- Elegir rango de páginas.
-- Establecer número de copias.
-- Ver una vista previa antes de imprimir.
-
-------------------------------------------------------------------------
-
-# 16. Reportes
-
-Crear una sección de reportes con filtros por rango de fechas.
-
-Reportes requeridos:
-
-    Equipos ingresados
-    Equipos entregados
-    Equipos pendientes
-    Equipos por tipo
-    Equipos por marca
-    Órdenes por estado
-    Órdenes atrasadas
-    Trabajos no reparables
-    Ingresos económicos
-    Pagos recibidos
-    Saldos pendientes
-    Clientes frecuentes
-    Repuestos utilizados
-
-Permitir exportar los reportes a:
-
-    PDF
-    CSV
-
-Los reportes económicos deben mostrar:
-
-    Ingresos por día
-    Ingresos por semana
-    Ingresos por mes
-    Costos de repuestos
-    Mano de obra
-    Saldo pendiente
-    Total cobrado
-
-Añadir gráficos sencillos mediante matplotlib, manteniendo esta
-dependencia como opcional. Los gráficos deben funcionar tanto en Linux
-como en Windows sin requerir dependencias gráficas adicionales.
-
-------------------------------------------------------------------------
-
-# 17. Copias de seguridad
-
-Crear un sistema de copias de seguridad que incluya:
-
-- Base de datos.
-- Fotografías.
-- Logo.
-- Configuración.
-- Plantillas de texto.
-- Plantillas de reportes.
-
-Crear copias en formato:
-
-    ZIP
-
-Permitir:
-
-- Crear una copia manual.
-- Elegir carpeta de destino.
-- Restaurar una copia.
-- Verificar la integridad antes de restaurar.
-- Crear copias automáticas.
-- Conservar las últimas N copias.
-- Mostrar fecha y tamaño de cada copia.
-- Abrir la carpeta de copias.
-
-Antes de restaurar, crear automáticamente una copia del estado actual.
-
-Mostrar claramente que una restauración reemplazará los datos
-existentes.
-
-------------------------------------------------------------------------
-
-# 18. Configuración
-
-Crear una ventana de configuración organizada en categorías:
-
-    Taller
-    Técnico
-    Numeración
-    Tipos de equipos
-    Estados
-    Costos e impuestos
-    Textos predefinidos
-    Documentos PDF
-    Fotografías
-    Copias de seguridad
-    Apariencia
-    Idioma
-
-## Datos iniciales
-
-Usar:
-
-    Nombre del técnico: Ing. Joseph Lucio
-    Moneda: USD
-    País: Ecuador
-
-Los demás datos deben quedar editables.
-
-Permitir cargar el logo del taller.
-
-------------------------------------------------------------------------
-
-# 19. Diseño visual
-
-Crear una interfaz limpia y profesional.
-
-Requisitos:
-
-- Diseño moderno.
-- Buena legibilidad.
-- Espaciado adecuado.
-- Botones claramente identificados.
-- No saturar la interfaz.
-- Adaptarse a resoluciones desde 1366 × 768.
-- Permitir maximizar la ventana.
-- Recordar tamaño y posición.
-- Recordar el estado de paneles y divisores.
-- Compatibilidad con tema claro y oscuro.
-- No usar colores fijos que impidan el funcionamiento con temas oscuros.
-- Respetar la paleta del sistema.
-- Usar hojas de estilo QSS solamente cuando sean necesarias.
-
-Mostrar los estados con etiquetas visuales de colores, pero incluir
-siempre el texto para no depender solamente del color.
-
-------------------------------------------------------------------------
-
-# 20. Validaciones
-
-Implementar validaciones para:
-
-- Nombre del cliente obligatorio.
-- Número de teléfono válido.
-- Fecha estimada no anterior a la fecha de ingreso.
-- Montos no negativos.
-- Anticipo no superior al total, salvo que se maneje como crédito.
-- Número de serie duplicado, mostrando advertencia.
-- Cliente duplicado, mostrando posibles coincidencias.
-- Fotografías en formatos válidos.
-- Rutas y nombres de archivos seguros.
-- Campos numéricos con `QDoubleValidator`.
-- Confirmación antes de eliminar información.
-
-No eliminar permanentemente órdenes por defecto.
-
-Implementar eliminación lógica:
-
-    activo
-    fecha_eliminacion
-
-Agregar una papelera desde la que se pueda restaurar una orden.
-
-------------------------------------------------------------------------
-
-# 21. Seguridad y privacidad
-
-La aplicación debe:
-
-- Funcionar completamente sin internet.
-- No enviar datos a servidores externos.
-- No registrar contraseñas del equipo en los logs.
-- Proteger campos sensibles.
-- Escapar correctamente el HTML mostrado.
-- Evitar inyección SQL usando SQLAlchemy.
-- Confirmar operaciones destructivas.
-- Evitar que una fotografía importada pueda sobrescribir otro archivo.
-- Ocultar la contraseña o PIN mediante un campo de contraseña.
-
-Preparar la arquitectura para añadir usuarios y roles en el futuro,
-aunque la primera versión pueda funcionar con un solo usuario.
-
-------------------------------------------------------------------------
-
-# 22. Registro de errores
-
-Crear logs en:
-
-    Linux:   ~/.local/state/lucio-jl-service-manager/logs/
-    Windows: %APPDATA%\lucio-jl-service-manager\logs\
-    macOS:   ~/Library/Logs/lucio-jl-service-manager/
-
-Registrar:
-
-- Inicio y cierre del programa.
-- Errores de base de datos.
-- Fallos al importar imágenes.
-- Fallos de generación de PDF.
-- Fallos en copias de seguridad.
-- Excepciones no controladas.
-
-No registrar:
-
-- Contraseñas.
-- PIN.
-- Información sensible innecesaria.
-
-Implementar un manejador global de excepciones que muestre al usuario un
-mensaje comprensible.
-
-------------------------------------------------------------------------
-
-# 23. Internacionalización
-
-Preparar el programa para traducciones con:
-
-    QTranslator
-    pylupdate6
-    linguist
-    lrelease
-
-Idioma inicial:
-
-    Español
-
-Preparar al menos las traducciones para:
-
-    Español
-    Inglés
-
-No escribir los textos visibles directamente en lugares difíciles de
-traducir.
-
-------------------------------------------------------------------------
-
-# 24. Accesibilidad y usabilidad
-
-Implementar:
-
-- Navegación mediante teclado.
-- Orden de tabulación correcto.
-- Atajos de teclado.
-- Etiquetas asociadas a cada campo.
-- Descripciones emergentes.
-- Mensajes de error comprensibles.
-- Confirmaciones claras.
-- Tamaño de fuente configurable.
-- Buen contraste.
-- Indicadores visibles de campos obligatorios.
-
-Atajos sugeridos:
-
-    Ctrl+N    Nueva recepción
-    Ctrl+F    Buscar
-    Ctrl+S    Guardar
-    Ctrl+P    Imprimir
-    Ctrl+Shift+P    Vista previa
-    Ctrl+B    Negrita
-    Ctrl+I    Cursiva
-    Ctrl+U    Subrayado
-    F5        Actualizar
-    Esc       Cerrar diálogo
-
-------------------------------------------------------------------------
-
-# 25. Pruebas
-
-Crear pruebas automatizadas para:
-
-- Creación de clientes.
-- Creación de equipos.
-- Creación de órdenes.
-- Generación del número de orden.
-- Cambio de estado.
-- Registro del historial.
-- Cálculo de costos.
-- Cálculo de saldo.
-- Registro de pagos.
-- Importación de fotografías.
-- Creación y restauración de copias.
-- Generación de PDF.
-- Validaciones.
-- Migraciones de base de datos.
-
-Usar una base de datos temporal durante las pruebas.
-
-------------------------------------------------------------------------
-
-# 26. Empaquetado
-
-Preparar el proyecto para crear:
-
-    Paquete .deb
-    AppImage
-    Ejecutable para Windows
-
-Para Debian:
-
-- Usar rutas compatibles con XDG.
-- No escribir en `/usr` durante la ejecución.
-- Incluir archivo `.desktop`.
-- Incluir iconos en diferentes tamaños.
-- Incluir metadatos AppStream.
-- Incluir licencia.
-- Incluir manual básico.
-- Declarar correctamente las dependencias.
-- Evitar descargar dependencias durante la ejecución.
-- Nota: PyQt6 puede no estar disponible en los repos de Debian estable.
-  Considerar empaquetar PyQt6 junto con la aplicación o usar un AppImage
-  que incluya todas las dependencias.
-
-Crear un archivo de escritorio similar a:
-
-    [Desktop Entry]
-    Type=Application
-    Name=JL Mantenimiento
-    Comment=Gestión de recepción y reparación de equipos
-    Exec=lucio-jl-service-manager
-    Icon=lucio-jl-service-manager
-    Categories=Office;Utility;
-    Terminal=false
-
-## Empaquetado para Windows
-
-- Crear un ejecutable con PyInstaller o Nuitka.
-- Incluir todas las dependencias (PyQt6, SQLAlchemy, matplotlib, etc.).
-- Generar un instalador `.exe` o un ejecutable autoextraíble.
-- No requerir instalación de Python por separado.
-- Colocar la base de datos y archivos en `%APPDATA%\lucio-jl-service-manager\`.
-- Crear un acceso directo en el menú Inicio y escritorio.
-- Registrar la extensión `.jlmb` para copias de seguridad (opcional).
-
-## Compatibilidad entre plataformas
-
-- Usar `pathlib` y `os.path` compatibles con Windows y Linux.
-- Usar `platformdirs` para obtener rutas de datos de aplicación correctas en cada sistema.
-- Evitar caracteres no válidos en nombres de archivo entre sistemas.
-- Probar en Linux y Windows antes de cada release.
-- Usar `sys.platform` para detectar el sistema y ajustar rutas si es necesario.
-
-------------------------------------------------------------------------
-
-# 27. README
-
-Crear un README completo con:
-
-- Descripción.
-- Características.
-- Capturas de pantalla provisionales.
-- Requisitos.
-- Instalación en entorno virtual.
-- Ejecución.
-- Pruebas.
-- Estructura del proyecto.
-- Creación del paquete.
-- Ubicación de datos.
-- Creación de copias de seguridad.
-- Restauración.
-- Resolución de problemas.
-- Licencia.
-
-## Incluir instrucciones
-
-para Windows con python y para lanzar:
-
-    python -m luciotech.main
-
-No usar venv porque no es necesario
-
-Para Linux, usar los paquetes python de los repositorios y lanzar con:
-
-    python3 -m luciotech.main
-
-Para macOS, de forma semejante a Linux.
-
-En Windows, si se usa un empaquetado con PyInstaller o Nuitka, el usuario
-podrá ejecutar el programa directamente sin necesidad de Python instalado.
-
-------------------------------------------------------------------------
-
-# 28. Metodología de implementación
-
-No intentes construir todo en un solo paso.
-
-Trabaja por fases y mantén siempre una versión ejecutable.
-
-## Fase 1
-
-Crear:
-
-- Estructura del proyecto.
-- Ventana principal.
-- Base de datos.
-- Modelos.
-- Clientes.
-- Equipos.
-- Nueva recepción.
-- Lista de órdenes.
-- Vista básica de una orden.
-
-## Fase 2
-
-Crear:
-
-- Editor enriquecido.
-- Diagnóstico.
-- Trabajo realizado.
-- Recomendaciones.
-- Historial.
-- Estados.
-- Fotografías.
-
-## Fase 3
-
-Crear:
-
-- Presupuestos.
-- Pagos.
-- Cálculos.
-- PDF.
-- Impresión.
-- Comprobante de recepción.
-- Informe técnico.
-
-## Fase 4
-
-Crear:
-
-- Reportes.
-- Copias de seguridad.
-- Configuración.
-- Temas.
-- Traducciones.
-- Empaquetado.
-
-Después de cada fase:
-
-1.  Ejecuta la aplicación.
-2.  Corrige los errores.
-3.  Ejecuta las pruebas.
-4.  Actualiza el README.
-5.  Realiza un commit Git descriptivo.
-
-------------------------------------------------------------------------
-
-# 29. Forma de trabajar
-
-Antes de escribir código:
-
-1.  Analiza todos los requisitos.
-2.  Propón la arquitectura definitiva.
-3.  Presenta el modelo de base de datos.
-4.  Enumera las pantallas.
-5.  Identifica riesgos técnicos.
-6.  Divide el trabajo en tareas pequeñas.
-
-Después comienza con la Fase 1.
-
-No generes archivos vacíos sin propósito.
-
-No uses pseudocódigo cuando sea posible implementar código funcional.
-
-Cada módulo debe incluir:
-
-- Tipos de datos.
-- Docstrings.
-- Manejo de errores.
-- Nombres claros.
-- Separación de responsabilidades.
-
-Utiliza:
-
-    from __future__ import annotations
-
-Añade anotaciones de tipo.
-
-Evita funciones demasiado largas y clases con demasiadas
-responsabilidades.
-
-------------------------------------------------------------------------
-
-# 30. Resultado esperado inicial
-
-En la primera implementación funcional debe ser posible:
-
-1.  Abrir el programa.
-2.  Crear o seleccionar un cliente.
-3.  Registrar un equipo.
-4.  Crear una orden de ingreso.
-5.  Añadir el problema reportado.
-6.  Añadir fotografías.
-7.  Guardar la orden.
-8.  Consultarla desde la lista.
-9.  Escribir un diagnóstico enriquecido.
-10. Cambiar el estado.
-11. Consultar el historial.
-12. Generar un comprobante de recepción en PDF.
-13. Imprimirlo.
-14. Cerrar y volver a abrir el programa sin perder datos.
-
-Comienza mostrando:
-
-- La arquitectura propuesta.
-- El esquema de la base de datos.
-- Las decisiones técnicas.
-- El plan de implementación.
-
-Después crea los archivos correspondientes a la Fase 1 y proporciona
-instrucciones exactas para instalar y ejecutar el proyecto.
+# Roadmap de JL Mantenimiento
+
+Estado verificado el **2026-08-15** contra el código del repositorio.
+
+Leyenda:
+
+- [x] Implementado y disponible en el código actual.
+- [ ] Pendiente, incompleto o todavía sin validación suficiente.
+
+Una tarea parcialmente implementada se divide en subtareas marcadas y
+desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
+
+## 1. Base del proyecto
+
+- [x] Nombre de la aplicación: JL Mantenimiento.
+- [x] Python 3.11 o superior.
+- [x] Interfaz de escritorio con PyQt6.
+- [x] Persistencia local con SQLite y SQLAlchemy 2.
+- [x] Rutas de datos y logs mediante `platformdirs`.
+- [x] Arquitectura separada en base de datos, servicios, UI, reportes y utilidades.
+- [x] Punto de entrada directo `python3 main.py`.
+- [x] Lanzador Linux `./run.sh`.
+- [x] Entrada instalable `jl-mantenimiento` definida en `pyproject.toml`.
+- [x] Funcionamiento sin conexión a internet.
+- [ ] Configuración completa y operativa de Alembic con revisiones versionadas.
+- [ ] Internacionalización real mediante catálogos de traducción.
+
+## 2. Base de datos
+
+- [x] Modelo de clientes.
+- [x] Modelo de equipos asociados a clientes.
+- [x] Modelo de órdenes de servicio.
+- [x] Modelo de fotografías.
+- [x] Modelo de cambios de estado.
+- [x] Modelo de eventos del historial.
+- [x] Modelo de pagos.
+- [x] Modelo clave/valor para configuración.
+- [x] Creación automática de tablas al iniciar.
+- [x] Claves foráneas activadas en SQLite.
+- [x] Eliminación lógica de clientes y órdenes.
+- [x] Papelera y restauración de órdenes.
+- [x] Reinicio controlado de la conexión para pruebas aisladas.
+- [ ] Migraciones Alembic reproducibles para actualizar instalaciones existentes.
+- [ ] Política de cierre explícito de sesiones de larga duración en widgets.
+- [ ] Índices y medición de rendimiento con bases de datos grandes.
+
+## 3. Ventana principal y navegación
+
+- [x] Ventana principal redimensionable con tamaño mínimo 1200 × 700.
+- [x] Barra lateral con Inicio, Órdenes, Recepción, Clientes, Equipos, Historial,
+  Reportes, Backups y Configuración.
+- [x] Navegación mediante `QStackedWidget`.
+- [x] Atajo `Ctrl+N` para nueva recepción.
+- [x] Atajo `Ctrl+F` para buscar órdenes.
+- [x] Barra de estado.
+- [x] Persistencia de la referencia Python de la ventana principal.
+- [ ] Conectar la acción global `Ctrl+P` a una impresión contextual válida.
+- [ ] Iconos definitivos y sistema visual consistente.
+- [ ] Recordar tamaño, posición, divisores y sección abierta.
+- [ ] Barra lateral realmente colapsable desde la interfaz.
+
+## 4. Panel de inicio
+
+- [x] Contador de órdenes activas.
+- [x] Contador de órdenes listas para entregar.
+- [x] Contador de órdenes retrasadas.
+- [x] Saldo total pendiente.
+- [x] Resumen por estado.
+- [x] Diez órdenes recientes con apertura por doble clic.
+- [x] Accesos a nueva recepción y lista de órdenes.
+- [x] Actualización al volver a Inicio.
+- [ ] Equipos recibidos hoy como indicador independiente.
+- [ ] Equipos entregados durante el mes.
+- [ ] Ingresos reales del mes basados en pagos, no en totales presupuestados.
+- [ ] Entregas estimadas próximas.
+- [ ] Gráficos opcionales.
+
+## 5. Clientes
+
+- [x] Crear clientes desde diálogo y desde Recepción.
+- [x] Editar clientes existentes.
+- [x] Buscar por nombre, identificación, teléfono o correo.
+- [x] Tabla general de clientes.
+- [x] Validar nombre y teléfono obligatorios.
+- [x] Evitar identificaciones duplicadas.
+- [x] Mostrar cantidad de equipos asociados.
+- [x] Integración segura entre sesiones SQLAlchemy de páginas y diálogos.
+- [ ] Validar formato de teléfono y correo.
+- [ ] Advertir posibles duplicados por teléfono, además de identificación.
+- [ ] Ficha completa con equipos, órdenes, pagos, saldos y última visita.
+- [ ] Mostrar órdenes anteriores dentro de Nueva recepción.
+- [ ] Papelera y restauración de clientes desde la UI.
+
+## 6. Equipos
+
+- [x] Registrar equipos durante una recepción.
+- [x] Inventario buscable por propietario, tipo, marca, modelo, serie y problema.
+- [x] Editar la ficha técnica de un equipo.
+- [x] Ocultar y mostrar contraseña/PIN en la edición.
+- [x] Evitar números de serie duplicados.
+- [x] Tipos de equipo configurables.
+- [x] Accesorios sugeridos para los tipos principales.
+- [ ] Advertencia no bloqueante para series duplicadas cuando sea legítimo repetirlas.
+- [ ] Historial completo del equipo y sus órdenes desde la ficha.
+- [ ] Cifrado en reposo de contraseñas/PIN o decisión documentada sobre su alcance.
+
+## 7. Nueva recepción
+
+- [x] Seleccionar o crear cliente sin abandonar el formulario.
+- [x] Editar datos básicos del cliente seleccionado.
+- [x] Capturar tipo, marca, modelo, serie, color y sistema operativo.
+- [x] Capturar contraseña/PIN como campo oculto.
+- [x] Capturar accesorios, estado físico, problema y observaciones.
+- [x] Capturar fecha/hora de ingreso y fecha estimada.
+- [x] Capturar prioridad, técnico, costo de diagnóstico, anticipo y estado inicial.
+- [x] Usar técnico y garantía predeterminados desde Configuración.
+- [x] Crear cliente, equipo, orden, pago inicial e historial.
+- [ ] Validar que la fecha estimada no sea anterior al ingreso.
+- [ ] Validar que el anticipo no supere el total o manejar crédito explícitamente.
+- [ ] Importar fotografías durante la recepción, antes de guardar la orden.
+- [ ] Pantalla de confirmación previa con resumen y número que se generará.
+- [ ] Variantes de campos/accesorios más completas por tipo de equipo.
+- [ ] Transacción atómica: revertir cliente/equipo si falla la creación final.
+
+## 8. Órdenes de servicio
+
+- [x] Generación automática de número de orden.
+- [x] Formato de número configurable y validado.
+- [x] Secuencia diaria sin colisiones, incluyendo órdenes en papelera.
+- [x] Lista con cliente, equipo, problema, estado, prioridad, total y saldo.
+- [x] Búsqueda por texto.
+- [x] Filtros por estado, prioridad, saldo, retraso y fechas.
+- [x] Ordenamiento por columnas.
+- [x] Apertura por doble clic y menú contextual.
+- [x] Papelera visible, buscable y restaurable.
+- [x] Asociación correcta de filas después de ordenar la tabla.
+- [ ] Elegir columnas visibles y guardar anchos/orden.
+- [ ] Selección múltiple y acciones por lote.
+- [ ] Exportar o imprimir directamente el listado filtrado.
+- [ ] Eliminación definitiva controlada desde la papelera.
+
+## 9. Vista y edición de una orden
+
+- [x] Resumen de orden, cliente y equipo.
+- [x] Cambio de estado con registro automático en historial.
+- [x] Pestañas de diagnóstico, historial, fotografías y presupuesto/pagos.
+- [x] Corrección de la creación diferida del widget de historial.
+- [x] Generación de comprobante e informe técnico.
+- [x] Impresión mediante diálogo del sistema.
+- [ ] Editar todos los datos generales de la orden desde su ficha.
+- [ ] Registrar fecha de finalización y entrega automáticamente según estado.
+- [ ] Mostrar/ocultar contraseña/PIN en la ficha de orden.
+- [ ] Refrescar todas las pestañas sin reconstruir widgets y sesiones repetidamente.
+
+## 10. Editor enriquecido
+
+- [x] Fuente y tamaño.
+- [x] Negrita, cursiva, subrayado y tachado.
+- [x] Color de texto y fondo.
+- [x] Alineación izquierda, centro, derecha y justificada.
+- [x] Listas con viñetas y numeradas.
+- [x] Sangría básica.
+- [x] Deshacer, rehacer, cortar, copiar y pegar.
+- [x] Pegado como texto plano.
+- [x] Insertar tabla, imagen y línea horizontal.
+- [x] Buscar y reemplazar.
+- [x] Limpiar formato.
+- [x] Vista previa de impresión.
+- [x] Guardar diagnóstico, trabajo realizado y recomendaciones como HTML.
+- [ ] Zoom del editor.
+- [ ] Edición avanzada de tablas.
+- [ ] Copiar imágenes insertadas al directorio de datos; hoy pueden depender de
+  su ruta original.
+- [ ] Fidelidad completa de texto enriquecido, tablas e imágenes al exportar PDF.
+
+## 11. Historial
+
+- [x] Crear registro al crear una orden.
+- [x] Crear registro al cambiar de estado.
+- [x] Añadir eventos tipificados y notas internas.
+- [x] Línea de tiempo dentro de la orden.
+- [x] Historial global combinado y ordenado cronológicamente.
+- [x] Buscar por orden, cliente, equipo, estado, evento, detalle o usuario.
+- [x] Filtrar por cambios de estado, eventos o tipo de evento.
+- [x] Abrir la orden desde el historial global.
+- [ ] Auditoría detallada de cambios de campos, no solo estados y eventos manuales.
+- [ ] Edición/eliminación controlada de eventos incorrectos.
+
+## 12. Fotografías
+
+- [x] Selección múltiple desde archivos.
+- [x] Importación de todas las imágenes de una carpeta.
+- [x] Copia al directorio de datos con nombre UUID.
+- [x] Validación básica por extensión.
+- [x] Corrección de orientación EXIF.
+- [x] Redimensionamiento de imágenes grandes.
+- [x] Generación de miniaturas.
+- [x] Vista en miniaturas y vista ampliada.
+- [x] Clasificación y edición de descripción.
+- [x] Rotación.
+- [x] Eliminación con confirmación y borrado de archivos.
+- [x] Inclusión de fotografías en PDF.
+- [ ] Arrastrar y soltar imágenes.
+- [ ] Pegar desde el portapapeles.
+- [ ] Reordenar fotografías desde la interfaz (el repositorio ya lo permite).
+- [ ] Importación directa mediante MTP/GVFS y documentación del flujo desde celular.
+- [ ] Validar contenido MIME además de extensión.
+- [ ] Reportar individualmente archivos rechazados; hoy solo se registran en logs.
+
+## 13. Presupuestos, costos y pagos
+
+- [x] Tabla editable de conceptos con tipo, descripción, cantidad y precio.
+- [x] Cálculo visual de subtotales y total.
+- [x] Guardar total y saldo en la orden.
+- [x] Registrar pagos con tipo, método, monto, referencia y notas.
+- [x] Recalcular saldo a partir de pagos.
+- [x] Registrar eventos por pagos.
+- [x] Corregir saldo inicial cuando no existe anticipo.
+- [ ] Modelo persistente para conceptos del presupuesto; actualmente solo persiste
+  el total calculado y los conceptos desaparecen al reabrir.
+- [ ] Controles editables y cálculo real de descuento e impuestos.
+- [ ] Aplicar moneda configurada en toda la UI, no solo documentos.
+- [ ] Validar sobrepagos, reembolsos y montos negativos según tipo.
+- [ ] Editar o anular pagos con trazabilidad.
+- [ ] Estado de aprobación/rechazo del presupuesto.
+
+## 14. PDF e impresión
+
+- [x] Comprobante de recepción A4.
+- [x] Informe técnico A4.
+- [x] Datos configurados del taller, técnico, contacto, moneda y logo.
+- [x] Datos de orden, cliente, equipo, costos, garantía, fotos y firmas.
+- [x] Nombres de archivo seguros y directorio de reportes.
+- [x] Escape de caracteres especiales en datos ingresados por usuarios.
+- [x] Impresión de resumen mediante `QPrintDialog`.
+- [x] Vista previa desde el editor enriquecido.
+- [ ] PDF de presupuesto.
+- [ ] Comprobante de entrega.
+- [ ] PDF del historial completo.
+- [ ] Condiciones del servicio configurables en comprobante.
+- [ ] Tamaño Carta y formato móvil 63 × 110 mm.
+- [ ] Numeración de páginas, encabezado y pie repetidos.
+- [ ] Márgenes configurables.
+- [ ] Vista previa específica para cada documento antes de guardarlo.
+- [ ] Preservar tablas, imágenes y formato enriquecido en el informe técnico.
+- [ ] Pruebas automatizadas de contenido PDF.
+
+## 15. Reportes
+
+- [x] Filtros por rango de fechas y estado.
+- [x] Tabla de resultados de órdenes.
+- [x] Conteo por estado.
+- [x] Resumen de totales y saldos.
+- [x] Exportación CSV.
+- [x] Exportación PDF tabular.
+- [ ] Calcular ingresos desde pagos recibidos en el periodo.
+- [ ] Filtros por técnico, prioridad, cliente, tipo y marca.
+- [ ] Reportes de tiempos promedio, garantías y equipos frecuentes.
+- [ ] Gráficos.
+- [ ] Aplicar moneda y encabezado configurados a los reportes exportados.
+- [ ] Impresión directa de reportes.
+
+## 16. Copias de seguridad
+
+- [x] Formato `.jlmb` basado en ZIP.
+- [x] Copia manual de base de datos y fotografías.
+- [x] Metadatos con fecha, versión y cantidad de archivos.
+- [x] Elección de carpeta de destino.
+- [x] Verificación de integridad SQLite antes de copiar y después de restaurar.
+- [x] Lista básica de backups presentes en el directorio predeterminado.
+- [x] Confirmación antes de restaurar.
+- [ ] Usar la API de backup de SQLite o cerrar conexiones para obtener una copia
+  consistente mientras la aplicación está abierta.
+- [ ] Crear copia pre-restauración sin volver a pedir manualmente una carpeta.
+- [ ] Validar rutas del ZIP y evitar extracción fuera del directorio de datos.
+- [ ] Restauración transaccional con rollback si falla la verificación.
+- [ ] Copias automáticas y retención de las últimas N.
+- [ ] Incluir logo externo, plantillas y otros archivos configurados.
+- [ ] Botón para abrir la carpeta de backups.
+- [ ] Pruebas automatizadas de creación y restauración.
+
+## 17. Configuración
+
+- [x] Datos del taller y logo.
+- [x] Datos del técnico.
+- [x] Formato configurable de número de orden.
+- [x] Garantía predeterminada.
+- [x] Moneda e impuestos almacenados.
+- [x] Temas sistema, Fusion claro y Fusion oscuro.
+- [x] Carga del tema guardado al iniciar.
+- [x] Catálogo administrable de tipos de equipo.
+- [x] Aplicación inmediata del catálogo en Nueva recepción.
+- [x] Restablecimiento general de configuración.
+- [ ] Aplicar tasa de impuestos automáticamente al presupuesto.
+- [ ] Catálogos administrables de estados, prioridades, accesorios, eventos,
+  métodos y tipos de pago.
+- [ ] Plantillas de texto, condiciones de servicio y notas frecuentes.
+- [ ] Configuración de rutas de reportes, backups y adjuntos.
+- [ ] Tamaño de fuente de la interfaz.
+- [ ] Validaciones de teléfono, correo e identificación configurables.
+
+## 18. Diseño, accesibilidad y usabilidad
+
+- [x] Uso general de paleta Qt y soporte claro/oscuro.
+- [x] Campos obligatorios indicados en los formularios principales.
+- [x] Mensajes comprensibles y confirmaciones para borrados.
+- [x] Atajos básicos y doble clic en tablas.
+- [x] Contraseña/PIN oculto por defecto en formularios editables.
+- [ ] Revisión completa de contraste; aún existen colores fijos en algunos widgets.
+- [ ] Navegación integral solo con teclado y orden de tabulación revisado.
+- [ ] Nombres accesibles y ayudas para lector de pantalla.
+- [ ] Tamaño de fuente configurable.
+- [ ] Tooltips consistentes para todas las acciones.
+- [ ] Pruebas en resoluciones menores y escalado HiDPI.
+
+## 19. Seguridad, privacidad y robustez
+
+- [x] Sin servicios externos ni telemetría.
+- [x] Consultas ORM parametrizadas con SQLAlchemy.
+- [x] Contraseñas/PIN no incluidos deliberadamente en logs.
+- [x] Campos sensibles ocultos por defecto.
+- [x] Escape de datos de usuario en PDF e impresión HTML.
+- [x] UUID para impedir colisiones entre fotografías importadas.
+- [x] Confirmación antes de eliminar órdenes, fotos y restaurar backups.
+- [ ] Cifrado o política explícita para contraseñas almacenadas en SQLite.
+- [ ] Validación segura contra Zip Slip al restaurar backups.
+- [ ] Capturador global de excepciones con diálogo y registro.
+- [ ] Manejo amable cuando el directorio de logs/datos no es escribible.
+- [ ] Validación MIME y límites contra imágenes maliciosas o enormes.
+
+## 20. Logging y diagnóstico
+
+- [x] Archivo rotativo de 5 MB con tres respaldos.
+- [x] Registro de inicio, conexión, ventanas, órdenes, imágenes, PDF y backups.
+- [x] Consola limitada a advertencias y errores.
+- [ ] Registrar cierre normal de la aplicación.
+- [ ] Capturar excepciones no controladas de Python y Qt.
+- [ ] Evitar handlers duplicados si se crea la aplicación más de una vez en pruebas.
+- [ ] Pantalla para abrir/copiar logs desde Configuración.
+
+## 21. Pruebas y calidad
+
+- [x] Suite base con 9 pruebas de clientes, equipos, órdenes, estados, pagos,
+  saldo y persistencia.
+- [x] Aislamiento de la base SQLite entre pruebas.
+- [x] Ejecución actual: `9 passed` con `PYTHONPATH=src pytest -q`.
+- [x] `.gitignore` para cachés, entornos, builds y logs.
+- [ ] Pruebas de validaciones de duplicados y formatos configurables.
+- [ ] Pruebas de repositorios, papelera e historial global.
+- [ ] Pruebas UI con `pytest-qt`.
+- [ ] Pruebas del editor enriquecido.
+- [ ] Pruebas de importación, rotación y borrado de fotografías.
+- [ ] Pruebas de PDF e impresión HTML.
+- [ ] Pruebas de backups y restauración segura.
+- [ ] Pruebas de migraciones.
+- [ ] Linter, formateador y comprobación de tipos configurados en CI.
+- [ ] Integración continua en GitHub Actions u otro sistema.
+
+## 22. Empaquetado y plataformas
+
+- [x] Metadatos de proyecto y dependencias en `pyproject.toml`.
+- [x] Archivo `.desktop` y metadatos AppStream iniciales.
+- [x] Especificación inicial de PyInstaller para Windows.
+- [x] Script inicial para estructura AppDir/AppImage.
+- [x] Rutas de datos multiplataforma mediante `platformdirs`.
+- [x] Apertura externa de PDF diferenciada por Linux, Windows y macOS.
+- [x] Eliminar archivos `__pycache__` rastreados por Git y evitar que regresen.
+- [ ] Corregir y probar el AppImage; el script actual es solo un esqueleto y su
+  distribución de `src`/`PYTHONPATH` debe verificarse.
+- [ ] Actualizar hidden imports de PyInstaller con las páginas y servicios nuevos.
+- [ ] Iconos reales en tamaños requeridos.
+- [ ] Paquete `.deb`.
+- [ ] Instalador o ejecutable Windows validado sin Python instalado.
+- [ ] Pruebas manuales en Debian, Ubuntu, MX Linux, Windows y macOS.
+- [ ] Registrar opcionalmente la extensión `.jlmb`.
+
+## 23. Documentación
+
+- [x] README con descripción, características, instalación, ejecución, estructura,
+  datos, pruebas, empaquetado y resolución de problemas.
+- [x] Comando directo `python3 main.py` documentado.
+- [x] Roadmap transformado en checklist verificable.
+- [x] Guía `AGENTS.md` para continuidad del desarrollo.
+- [ ] Capturas de pantalla reales.
+- [ ] Manual de usuario con flujo completo.
+- [ ] Documentar creación y restauración de backups paso a paso.
+- [ ] Documentación de arquitectura y decisiones técnicas de largo plazo.
+- [x] Alinear las rutas de datos mostradas en README con `platformdirs` y los
+  valores actuales de `APP_NAME`/`ORG_NAME`.
+
+## 24. Prioridad recomendada para las próximas iteraciones
+
+- [ ] **P0 — Seguridad de backups:** validar miembros ZIP, backup consistente,
+  restauración transaccional y copia pre-restauración automática.
+- [ ] **P0 — Presupuestos persistentes:** crear modelo/migración para conceptos y
+  completar impuestos, descuentos y recálculo de pagos.
+- [ ] **P0 — Ampliar pruebas:** cubrir los flujos añadidos después de la suite base.
+- [ ] **P1 — Recepción completa:** fotos antes de guardar, validaciones y resumen.
+- [ ] **P1 — Ficha de cliente:** órdenes, equipos, pagos, saldos y visitas.
+- [ ] **P1 — Documentos faltantes:** presupuesto y comprobante de entrega.
+- [ ] **P1 — Migraciones:** convertir el esquema actual en revisiones Alembic.
+- [ ] **P2 — Empaquetado real:** limpiar artefactos, completar AppImage/PyInstaller
+  y probar plataformas objetivo.
+- [ ] **P2 — Accesibilidad, traducciones y persistencia de preferencias visuales.**
+
+## 25. Criterio para marcar tareas futuras
+
+- [x] Marcar una tarea solo cuando el flujo esté conectado a la UI o API usada.
+- [x] Exigir una prueba automatizada o una validación reproducible proporcional al
+  riesgo antes de pasar de `[ ]` a `[x]`.
+- [x] Si una función es parcial, dividirla; no marcar el bloque completo.
+- [x] Actualizar este archivo y `AGENTS.md` al cerrar cada iteración importante.
