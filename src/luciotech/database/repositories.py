@@ -8,7 +8,7 @@ from typing import Sequence
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from luciotech.database.models import Customer, Equipment, ServiceOrder, Photo, StatusHistory, HistoryEvent, Payment
+from luciotech.database.models import Customer, Equipment, ServiceOrder, Photo, StatusHistory, HistoryEvent, Payment, BudgetConcept
 
 
 class CustomerRepo:
@@ -422,3 +422,44 @@ class PaymentRepo:
 
         stmt = select(func.coalesce(func.sum(Payment.amount), 0.0)).where(Payment.order_id == order_id)
         return self.session.scalar(stmt) or 0.0
+
+
+class BudgetConceptRepo:
+    """Repositorio para conceptos del presupuesto."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_by_order(self, order_id: int) -> Sequence[BudgetConcept]:
+        stmt = (
+            select(BudgetConcept)
+            .where(BudgetConcept.order_id == order_id)
+            .order_by(BudgetConcept.sort_order, BudgetConcept.id)
+        )
+        return self.session.scalars(stmt).all()
+
+    def create(self, concept: BudgetConcept) -> BudgetConcept:
+        self.session.add(concept)
+        self.session.commit()
+        self.session.refresh(concept)
+        return concept
+
+    def delete_by_order(self, order_id: int) -> None:
+        stmt = select(BudgetConcept).where(BudgetConcept.order_id == order_id)
+        for concept in self.session.scalars(stmt).all():
+            self.session.delete(concept)
+        self.session.commit()
+
+    def replace_for_order(self, order_id: int, concepts: list[BudgetConcept]) -> list[BudgetConcept]:
+        """Reemplazar todos los conceptos de una orden en una transacción."""
+        self.delete_by_order(order_id)
+        saved = []
+        for idx, concept in enumerate(concepts):
+            concept.order_id = order_id
+            concept.sort_order = idx
+            self.session.add(concept)
+            saved.append(concept)
+        self.session.commit()
+        for c in saved:
+            self.session.refresh(c)
+        return saved

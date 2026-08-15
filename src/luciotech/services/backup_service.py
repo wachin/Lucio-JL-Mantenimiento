@@ -6,11 +6,10 @@ import json
 import logging
 import shutil
 import sqlite3
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget, QInputDialog
 
 from luciotech.config import get_data_dir
 
@@ -23,20 +22,44 @@ class BackupService:
     BACKUP_EXTENSION = ".jlmb"  # JL Mantenimiento Backup
 
     @classmethod
-    def create_backup(cls, parent: QWidget | None = None) -> str | None:
-        """Crear copia de seguridad completa.
+    def create_backup(cls, parent=None, dest_dir: str | None = None) -> str | None:
+        """Crear copia de seguridad completa (interfaz con diálogos)."""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
-        Incluye: base de datos, fotografías, configuración.
-        Retorna la ruta del archivo creado.
-        """
-        # Seleccionar destino
-        dest_dir = QFileDialog.getExistingDirectory(
-            parent or QWidget(),
-            "Seleccionar carpeta para la copia de seguridad",
-        )
+        if dest_dir is None:
+            dest_dir = QFileDialog.getExistingDirectory(
+                parent or QWidget(),
+                "Seleccionar carpeta para la copia de seguridad",
+            )
         if not dest_dir:
             return None
 
+        data_dir = get_data_dir()
+        db_path = data_dir / "database.sqlite3"
+
+        if db_path.exists() and not cls._verify_db_integrity(str(db_path)):
+            reply = QMessageBox.question(
+                parent, "Advertencia",
+                "La base de datos podría estar corrupta. ¿Desea continuar con la copia?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return None
+
+        try:
+            result = cls.create_backup_to(dest_dir)
+            return result
+        except Exception as e:
+            logger.exception("Error creando copia de seguridad")
+            QMessageBox.critical(parent or QWidget(), "Error", f"No se pudo crear la copia: {e}")
+            return None
+
+    @classmethod
+    def create_backup_to(cls, dest_dir: str) -> str:
+        """Crear copia de seguridad en el directorio indicado (sin UI).
+
+        Retorna la ruta del archivo creado. Lanza excepciones si algo falla.
+        """
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup_name = f"JL_Mantenimiento_Backup_{timestamp}{cls.BACKUP_EXTENSION}"
         backup_path = Path(dest_dir) / backup_name
@@ -45,54 +68,44 @@ class BackupService:
         db_path = data_dir / "database.sqlite3"
         attachments_dir = data_dir / "attachments"
 
-        try:
-            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                # Base de datos
-                if db_path.exists():
-                    # Verificar integridad antes de incluir
-                    if not cls._verify_db_integrity(str(db_path)):
-                        reply = QMessageBox.question(
-                            parent, "Advertencia",
-                            "La base de datos podría estar corrupta. ¿Desea continuar con la copia?",
-                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                        )
-                        if reply == QMessageBox.StandardButton.No:
-                            return None
+        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            if db_path.exists():
+                cls._backup_sqlite(str(db_path), zf)
 
-                    zf.write(db_path, "database.sqlite3")
+            photo_count = 0
+            if attachments_dir.exists():
+                for photo_file in attachments_dir.rglob("*"):
+                    if photo_file.is_file():
+                        arc_name = str(photo_file.relative_to(data_dir))
+                        zf.write(photo_file, arc_name)
+                        photo_count += 1
 
-                # Fotografías
-                if attachments_dir.exists():
-                    for photo_file in attachments_dir.rglob("*"):
-                        if photo_file.is_file():
-                            arc_name = str(photo_file.relative_to(data_dir))
-                            zf.write(photo_file, arc_name)
+            metadata = {
+                "created_at": datetime.now().isoformat(),
+                "version": "0.2.0",
+                "db_path": str(db_path),
+                "photo_count": photo_count,
+            }
+            zf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
 
-                # Metadatos de la copia
-                metadata = {
-                    "created_at": datetime.now().isoformat(),
-                    "version": "0.1.0",
-                    "db_path": str(db_path),
-                    "photo_count": len(list(attachments_dir.rglob("*"))) if attachments_dir.exists() else 0,
-                }
-                zf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
-
-            logger.info("Copia de seguridad creada: %s (%.1f MB)", backup_path, backup_path.stat().st_size / 1024 / 1024)
-            return str(backup_path)
-
-        except Exception as e:
-            logger.exception("Error creando copia de seguridad")
-            QMessageBox.critical(parent or QWidget(), "Error", f"No se pudo crear la copia: {e}")
-            return None
+        logger.info(
+            "Copia de seguridad creada: %s (%.1f MB)",
+            backup_path,
+            backup_path.stat().st_size / 1024 / 1024,
+        )
+        return str(backup_path)
 
     @classmethod
-    def restore_backup(cls, parent: QWidget | None = None) -> bool:
+    def restore_backup(cls, parent=None) -> bool:
         """Restaurar desde una copia de seguridad.
 
         Crea automáticamente una copia del estado actual antes de restaurar.
+        La restauración es transaccional: extrae a un directorio temporal,
+        verifica integridad y solo entonces reemplaza los datos actuales.
         Retorna True si la restauración fue exitosa.
         """
-        # Seleccionar archivo
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
+
         backup_path, _ = QFileDialog.getOpenFileName(
             parent or QWidget(),
             "Seleccionar copia de seguridad",
@@ -102,7 +115,6 @@ class BackupService:
         if not backup_path:
             return False
 
-        # Advertencia
         reply = QMessageBox.warning(
             parent or QWidget(),
             "Restaurar copia de seguridad",
@@ -116,30 +128,50 @@ class BackupService:
 
         data_dir = get_data_dir()
 
-        # Crear copia del estado actual
-        pre_restore_backup = cls.create_backup(parent)
-        if pre_restore_backup:
-            logger.info("Copia pre-restauración creada: %s", pre_restore_backup)
+        # Copia pre-restauración automática
+        try:
+            pre_restore_backup = cls.create_backup(parent, dest_dir=str(data_dir / "backups"))
+            if pre_restore_backup:
+                logger.info("Copia pre-restauración creada: %s", pre_restore_backup)
+        except Exception:
+            logger.warning("No se pudo crear copia pre-restauración, continuando de todas formas")
 
         try:
             with zipfile.ZipFile(backup_path, "r") as zf:
-                # Verificar contenido
                 namelist = zf.namelist()
                 if "database.sqlite3" not in namelist:
-                    QMessageBox.critical(parent or QWidget(), "Error", "La copia de seguridad no contiene una base de datos válida.")
+                    QMessageBox.critical(
+                        parent or QWidget(), "Error",
+                        "La copia de seguridad no contiene una base de datos válida.",
+                    )
                     return False
 
-                # Extraer
-                zf.extractall(data_dir)
+                # Validar todas las rutas contra Zip Slip
+                if not cls._validate_zip_paths(namelist, data_dir):
+                    QMessageBox.critical(
+                        parent or QWidget(), "Error de seguridad",
+                        "La copia de seguridad contiene rutas inválidas que podrían "
+                        "escribir archivos fuera del directorio de datos.",
+                    )
+                    return False
 
-            # Verificar la base de datos restaurada
-            restored_db = data_dir / "database.sqlite3"
-            if not cls._verify_db_integrity(str(restored_db)):
-                QMessageBox.warning(
-                    parent or QWidget(), "Advertencia",
-                    "La base de datos restaurada podría tener problemas.\n"
-                    "Se recomienda crear una nueva copia de seguridad.",
-                )
+                # Extraer a directorio temporal
+                with tempfile.TemporaryDirectory(prefix="jlmb-restore-") as tmpdir:
+                    tmpdir_path = Path(tmpdir)
+                    zf.extractall(tmpdir_path)
+
+                    # Verificar integridad de la DB extraída
+                    restored_db = tmpdir_path / "database.sqlite3"
+                    if not cls._verify_db_integrity(str(restored_db)):
+                        QMessageBox.warning(
+                            parent or QWidget(), "Advertencia",
+                            "La base de datos del backup parece corrupta.\n"
+                            "La restauración se ha cancelado.",
+                        )
+                        return False
+
+                    # Reemplazar datos actuales de forma atómica
+                    cls._atomic_replace(tmpdir_path, data_dir)
 
             logger.info("Copia de seguridad restaurada desde: %s", backup_path)
             QMessageBox.information(
@@ -190,6 +222,66 @@ class BackupService:
         return backups
 
     @staticmethod
+    def _validate_zip_paths(namelist: list[str], data_dir: Path) -> bool:
+        """Validar que ninguna ruta del ZIP escape del directorio de destino.
+
+        Previene ataques Zip Slip donde nombres como ``../../etc/passwd``
+        escribirían archivos fuera del directorio esperado.
+        """
+        resolved_data = data_dir.resolve()
+        for name in namelist:
+            target = (resolved_data / name).resolve()
+            if not str(target).startswith(str(resolved_data)):
+                logger.error("Ruta inválida detectada en ZIP: %s", name)
+                return False
+        return True
+
+    @staticmethod
+    def _backup_sqlite(db_path: str, zf: zipfile.ZipFile) -> None:
+        """Crear copia consistente de SQLite usando la API de backup.
+
+        Usa ``sqlite3.Connection.backup()`` para obtener una instantánea
+        consistente aunque la base de datos esté en uso.
+        """
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            source = sqlite3.connect(db_path)
+            dest = sqlite3.connect(tmp_path)
+            try:
+                source.backup(dest)
+            finally:
+                dest.close()
+                source.close()
+            zf.write(tmp_path, "database.sqlite3")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    @staticmethod
+    def _atomic_replace(source_dir: Path, target_dir: Path) -> None:
+        """Reemplazar archivos del directorio de datos desde el staging.
+
+        Solo reemplaza archivos conocidos (database.sqlite3 y attachments/).
+        No borra otros archivos existentes que no estén en el backup.
+        """
+        # Reemplazar base de datos
+        src_db = source_dir / "database.sqlite3"
+        dst_db = target_dir / "database.sqlite3"
+        if src_db.exists():
+            if dst_db.exists():
+                dst_db.unlink()
+            shutil.copy2(str(src_db), str(dst_db))
+
+        # Reemplazar attachments
+        src_attach = source_dir / "attachments"
+        dst_attach = target_dir / "attachments"
+        if src_attach.exists():
+            if dst_attach.exists():
+                shutil.rmtree(str(dst_attach))
+            shutil.copytree(str(src_attach), str(dst_attach))
+
+    @staticmethod
     def _verify_db_integrity(db_path: str) -> bool:
         """Verificar integridad de la base de datos SQLite."""
         try:
@@ -198,6 +290,6 @@ class BackupService:
             cursor.execute("PRAGMA integrity_check")
             result = cursor.fetchone()
             conn.close()
-            return result and result[0] == "ok"
+            return result is not None and result[0] == "ok"
         except Exception:
             return False

@@ -24,7 +24,8 @@ from PyQt6.QtWidgets import (
     QDateEdit,
 )
 
-from luciotech.database.models import ServiceOrder, Payment
+from luciotech.database.models import ServiceOrder, Payment, BudgetConcept
+from luciotech.database.repositories import BudgetConceptRepo
 from luciotech.services.order_service import OrderService
 from luciotech.config import PAYMENT_TYPES, PAYMENT_METHODS, CONCEPT_TYPES
 
@@ -140,14 +141,27 @@ class BudgetPaymentsTab(QWidget):
 
     def _load_data(self) -> None:
         """Cargar conceptos y pagos."""
-        # Load payments
-        payments = self._order_service.order_repo.get_by_id(self._order.id).payments if hasattr(self._order_service.order_repo, 'get_by_id') else []
-        # Fallback
         from luciotech.database.repositories import PaymentRepo
         from luciotech.database.connection import get_session
-        pay_repo = PaymentRepo(get_session())
+
+        session = get_session()
+        pay_repo = PaymentRepo(session)
         payments = pay_repo.get_by_order(self._order.id)
 
+        # Load persisted budget concepts
+        concept_repo = BudgetConceptRepo(session)
+        concepts = concept_repo.get_by_order(self._order.id)
+
+        self._concepts_table.setRowCount(0)
+        for concept in concepts:
+            self._add_concept_row(
+                concept_type=concept.concept_type,
+                description=concept.description,
+                quantity=concept.quantity,
+                unit_price=concept.unit_price,
+            )
+
+        # Load payments
         self._payments_table.setRowCount(0)
         total_paid = 0
         for row, p in enumerate(payments):
@@ -160,42 +174,50 @@ class BudgetPaymentsTab(QWidget):
             total_paid += p.amount
 
         # Update summary
+        self._recalculate()
         self._lbl_advance.setText(f"${self._order.advance_payment:,.2f}")
         self._lbl_paid.setText(f"${total_paid:,.2f}")
         self._lbl_balance.setText(f"${self._order.balance:,.2f}")
-        self._lbl_total.setText(f"${self._order.total:,.2f}")
-        self._lbl_subtotal.setText(f"${self._order.total:,.2f}")
 
-    def _add_concept_row(self) -> None:
+    def _add_concept_row(
+        self,
+        concept_type: str = "",
+        description: str = "",
+        quantity: float = 1.0,
+        unit_price: float = 0.0,
+    ) -> None:
         row = self._concepts_table.rowCount()
         self._concepts_table.insertRow(row)
 
         type_combo = QComboBox()
         type_combo.addItems(CONCEPT_TYPES)
+        if concept_type and concept_type in CONCEPT_TYPES:
+            type_combo.setCurrentText(concept_type)
         self._concepts_table.setCellWidget(row, 0, type_combo)
 
-        desc_item = QTableWidgetItem("")
+        desc_item = QTableWidgetItem(description)
         self._concepts_table.setItem(row, 1, desc_item)
 
         qty_spin = QDoubleSpinBox()
         qty_spin.setRange(0, 9999)
-        qty_spin.setValue(1)
+        qty_spin.setValue(quantity)
         self._concepts_table.setCellWidget(row, 2, qty_spin)
 
         price_spin = QDoubleSpinBox()
         price_spin.setRange(0, 999999)
         price_spin.setPrefix("$ ")
+        price_spin.setValue(unit_price)
         self._concepts_table.setCellWidget(row, 3, price_spin)
 
         subtotal_label = QLabel("$0.00")
         self._concepts_table.setCellWidget(row, 4, subtotal_label)
 
-        # Auto-calculate subtotal
         def calc():
             sub = qty_spin.value() * price_spin.value()
             subtotal_label.setText(f"${sub:,.2f}")
         qty_spin.valueChanged.connect(calc)
         price_spin.valueChanged.connect(calc)
+        calc()
 
     def _remove_concept_row(self) -> None:
         row = self._concepts_table.currentRow()
@@ -284,27 +306,58 @@ class BudgetPaymentsTab(QWidget):
         dialog.exec()
 
     def _save_budget(self) -> None:
-        """Guardar presupuesto calculado."""
-        # Calculate total from concepts
-        subtotal = 0
-        for row in range(self._concepts_table.rowCount()):
-            sub_widget = self._concepts_table.cellWidget(row, 4)
-            if sub_widget and isinstance(sub_widget, QLabel):
-                text = sub_widget.text().replace("$", "").replace(",", "")
-                try:
-                    subtotal += float(text)
-                except ValueError:
-                    pass
+        """Guardar presupuesto calculado con conceptos persistentes."""
+        from luciotech.database.connection import get_session
+        from luciotech.database.repositories import PaymentRepo
 
-        self._order.total = subtotal
-        self._order.balance = subtotal - self._order.advance_payment
+        session = get_session()
+        concept_repo = BudgetConceptRepo(session)
+
+        concepts = []
+        subtotal = 0.0
+        for row in range(self._concepts_table.rowCount()):
+            type_combo = self._concepts_table.cellWidget(row, 0)
+            desc_item = self._concepts_table.item(row, 1)
+            qty_spin = self._concepts_table.cellWidget(row, 2)
+            price_spin = self._concepts_table.cellWidget(row, 3)
+
+            if not (type_combo and qty_spin and price_spin):
+                continue
+
+            concept_type = type_combo.currentText()
+            description = desc_item.text().strip() if desc_item else ""
+            quantity = qty_spin.value()
+            unit_price = price_spin.value()
+            line_subtotal = quantity * unit_price
+            subtotal += line_subtotal
+
+            concepts.append(BudgetConcept(
+                order_id=self._order.id,
+                concept_type=concept_type,
+                description=description,
+                quantity=quantity,
+                unit_price=unit_price,
+                subtotal=line_subtotal,
+            ))
+
+        concept_repo.replace_for_order(self._order.id, concepts)
+
+        discount = self._order.discount
+        tax = self._order.tax
+        total = subtotal - discount + tax
+
+        self._order.total = total
+        total_paid = PaymentRepo(session).get_total_paid(self._order.id)
+        self._order.balance = total - total_paid
         self._order_service.order_repo.update(self._order)
 
-        self._lbl_total.setText(f"${self._order.total:,.2f}")
+        self._recalculate()
+        self._lbl_paid.setText(f"${total_paid:,.2f}")
         self._lbl_balance.setText(f"${self._order.balance:,.2f}")
 
         QMessageBox.information(self, "Guardado", f"Presupuesto guardado. Total: ${self._order.total:,.2f}")
-        logger.info("Presupuesto guardado para orden %s: $%.2f", self._order.order_number, self._order.total)
+        logger.info("Presupuesto guardado para orden %s: $%.2f (%d conceptos)",
+                     self._order.order_number, self._order.total, len(concepts))
 
 
 class HRLine(QWidget):

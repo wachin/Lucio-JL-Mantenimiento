@@ -116,6 +116,7 @@ class ServiceOrder(Base):
     status_history = relationship("StatusHistory", back_populates="order", lazy="select", cascade="all, delete-orphan")
     events = relationship("HistoryEvent", back_populates="order", lazy="select", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", lazy="select", cascade="all, delete-orphan")
+    budget_concepts = relationship("BudgetConcept", back_populates="order", lazy="select", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<ServiceOrder(number='{self.order_number}', status='{self.status}')>"
@@ -198,6 +199,27 @@ class Payment(Base):
 
     def __repr__(self) -> str:
         return f"<Payment(id={self.id}, amount={self.amount}, type='{self.payment_type}')>"
+
+
+class BudgetConcept(Base):
+    """Concepto individual del presupuesto de una orden."""
+
+    __tablename__ = "budget_concepts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False)
+    concept_type = Column(String(50), nullable=False)
+    description = Column(String(500), nullable=False)
+    quantity = Column(Float, default=1.0, nullable=False)
+    unit_price = Column(Float, default=0.0, nullable=False)
+    subtotal = Column(Float, default=0.0, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    order = relationship("ServiceOrder", back_populates="budget_concepts", lazy="select")
+
+    def __repr__(self) -> str:
+        return f"<BudgetConcept(id={self.id}, type='{self.concept_type}', subtotal={self.subtotal})>"
 
 
 class Settings(Base):

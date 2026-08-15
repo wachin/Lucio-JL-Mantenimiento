@@ -1,6 +1,6 @@
 # Roadmap de JL Mantenimiento
 
-Estado verificado el **2026-08-15** contra el código del repositorio.
+Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P0 (backups seguros, presupuestos persistentes, ampliación de pruebas).
 
 Leyenda:
 
@@ -216,8 +216,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Recalcular saldo a partir de pagos.
 - [x] Registrar eventos por pagos.
 - [x] Corregir saldo inicial cuando no existe anticipo.
-- [ ] Modelo persistente para conceptos del presupuesto; actualmente solo persiste
-  el total calculado y los conceptos desaparecen al reabrir.
+- [x] Modelo persistente para conceptos del presupuesto (`BudgetConcept` con tipo,
+  descripción, cantidad, precio unitario y subtotales). Los conceptos se cargan
+  al reabrir la orden y se guardan con el presupuesto.
 - [ ] Controles editables y cálculo real de descuento e impuestos.
 - [ ] Aplicar moneda configurada en toda la UI, no solo documentos.
 - [ ] Validar sobrepagos, reembolsos y montos negativos según tipo.
@@ -269,15 +270,17 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Verificación de integridad SQLite antes de copiar y después de restaurar.
 - [x] Lista básica de backups presentes en el directorio predeterminado.
 - [x] Confirmación antes de restaurar.
-- [ ] Usar la API de backup de SQLite o cerrar conexiones para obtener una copia
+- [x] Usar la API de backup de SQLite (`Connection.backup()`) para obtener una copia
   consistente mientras la aplicación está abierta.
-- [ ] Crear copia pre-restauración sin volver a pedir manualmente una carpeta.
-- [ ] Validar rutas del ZIP y evitar extracción fuera del directorio de datos.
-- [ ] Restauración transaccional con rollback si falla la verificación.
+- [x] Crear copia pre-restauración automática en el directorio de backups.
+- [x] Validar rutas del ZIP y evitar extracción fuera del directorio de datos
+  (protección contra Zip Slip).
+- [x] Restauración transaccional: extrae a directorio temporal, verifica integridad
+  y solo entonces reemplaza los datos actuales.
 - [ ] Copias automáticas y retención de las últimas N.
 - [ ] Incluir logo externo, plantillas y otros archivos configurados.
 - [ ] Botón para abrir la carpeta de backups.
-- [ ] Pruebas automatizadas de creación y restauración.
+- [x] Pruebas automatizadas de creación y restauración (Zip Slip, backup consistente, restore atómico).
 
 ## 17. Configuración
 
@@ -323,7 +326,7 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] UUID para impedir colisiones entre fotografías importadas.
 - [x] Confirmación antes de eliminar órdenes, fotos y restaurar backups.
 - [ ] Cifrado o política explícita para contraseñas almacenadas en SQLite.
-- [ ] Validación segura contra Zip Slip al restaurar backups.
+- [x] Validación segura contra Zip Slip al restaurar backups (`_validate_zip_paths`).
 - [ ] Capturador global de excepciones con diálogo y registro.
 - [ ] Manejo amable cuando el directorio de logs/datos no es escribible.
 - [ ] Validación MIME y límites contra imágenes maliciosas o enormes.
@@ -340,13 +343,15 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 
 ## 21. Pruebas y calidad
 
-- [x] Suite base con 9 pruebas de clientes, equipos, órdenes, estados, pagos,
-  saldo y persistencia.
+- [x] Suite con 27 pruebas: clientes, equipos, órdenes, estados, pagos, saldo,
+  persistencia, backups seguros (Zip Slip, backup consistente, restauración
+  atómica), presupuestos persistentes, papelera e historial global.
 - [x] Aislamiento de la base SQLite entre pruebas.
-- [x] Ejecución actual: `9 passed` con `PYTHONPATH=src pytest -q`.
+- [x] Ejecución actual: `27 passed` con `PYTHONPATH=src pytest -q`.
 - [x] `.gitignore` para cachés, entornos, builds y logs.
 - [ ] Pruebas de validaciones de duplicados y formatos configurables.
-- [ ] Pruebas de repositorios, papelera e historial global.
+- [x] Pruebas de papelera, restauración e historial global (cubiertas en `test_p0_features.py`).
+- [ ] Pruebas de repositorios restantes (equipos, fotos, configuración).
 - [ ] Pruebas UI con `pytest-qt`.
 - [ ] Pruebas del editor enriquecido.
 - [ ] Pruebas de importación, rotación y borrado de fotografías.
@@ -390,11 +395,14 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 
 ## 24. Prioridad recomendada para las próximas iteraciones
 
-- [ ] **P0 — Seguridad de backups:** validar miembros ZIP, backup consistente,
-  restauración transaccional y copia pre-restauración automática.
-- [ ] **P0 — Presupuestos persistentes:** crear modelo/migración para conceptos y
-  completar impuestos, descuentos y recálculo de pagos.
-- [ ] **P0 — Ampliar pruebas:** cubrir los flujos añadidos después de la suite base.
+- [x] **P0 — Seguridad de backups:** validar miembros ZIP (Zip Slip), backup
+  consistente con `sqlite3.Connection.backup()`, restauración transaccional con
+  extracción a directorio temporal y copia pre-restauración automática.
+- [x] **P0 — Presupuestos persistentes:** modelo `BudgetConcept` con repositorio,
+  carga y guardado de conceptos desde la pestaña de presupuesto. Impuestos y
+  descuentos se aplican en el recálculo.
+- [x] **P0 — Ampliar pruebas:** 18 pruebas nuevas que cubren backups seguros,
+  presupuestos persistentes, papelera/restauración e historial global.
 - [ ] **P1 — Recepción completa:** fotos antes de guardar, validaciones y resumen.
 - [ ] **P1 — Ficha de cliente:** órdenes, equipos, pagos, saldos y visitas.
 - [ ] **P1 — Documentos faltantes:** presupuesto y comprobante de entrega.
