@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
-from luciotech.database.models import ServiceOrder, Photo
+from luciotech.database.models import ServiceOrder, Photo, BudgetConcept
 from luciotech.config import get_data_dir
 from luciotech.services.settings_service import SettingsService
 
@@ -467,5 +467,200 @@ class TechnicalReportPDFService:
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             name_slug = _safe_filename(customer.full_name if customer else "Cliente")
             output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Informe-Tecnico.pdf")
+
+        return builder.save_to_file(output_path)
+
+
+class BudgetPDFService:
+    """Generar PDF de presupuesto con conceptos detallados."""
+
+    @staticmethod
+    def generate(order: ServiceOrder, concepts: Sequence[BudgetConcept], output_path: str | None = None) -> str:
+        customer = order.customer
+        equipment = order.equipment
+        settings = _document_settings()
+        currency = settings["currency"]
+
+        builder = PDFBuilder(title=f"Presupuesto - {order.order_number}")
+        builder.add_header(
+            settings["workshop_name"],
+            order.technician or settings["technician_name"],
+            settings["workshop_address"],
+            settings["workshop_phone"],
+            settings["workshop_email"],
+            settings["logo_path"],
+        )
+
+        builder.story.append(Paragraph("PRESUPUESTO", builder.styles["DocTitle"]))
+        builder.story.append(Spacer(1, 5 * mm))
+
+        # Datos de la orden
+        builder._add_section("Datos de la Orden")
+        builder._add_field("Nº Orden", order.order_number)
+        builder._add_field("Fecha", order.intake_date.strftime("%Y-%m-%d") if order.intake_date else "")
+        builder._add_field("Estado", order.status)
+        if customer:
+            builder._add_field("Cliente", customer.full_name)
+        if equipment:
+            equip_desc = f"{equipment.equipment_type} {equipment.brand or ''} {equipment.model or ''}".strip()
+            builder._add_field("Equipo", equip_desc)
+            if equipment.serial_number:
+                builder._add_field("Nº Serie", equipment.serial_number)
+
+        # Tabla de conceptos
+        if concepts:
+            builder._add_section("Detalle del Presupuesto")
+            rows = []
+            subtotal = 0.0
+            for c in concepts:
+                line_total = c.quantity * c.unit_price
+                subtotal += line_total
+                rows.append([
+                    c.concept_type,
+                    c.description or "—",
+                    str(c.quantity),
+                    _money(c.unit_price, currency),
+                    _money(line_total, currency),
+                ])
+
+            builder.story.append(builder._build_table(
+                ["Tipo", "Descripción", "Cant.", "Precio Unit.", "Subtotal"],
+                rows,
+                col_widths=[2.5 * cm, 7 * cm, 1.5 * cm, 2.5 * cm, 2.5 * cm],
+            ))
+        else:
+            builder._add_section("Presupuesto")
+            builder.story.append(Paragraph("Sin conceptos detallados.", builder.styles["ValueStyle"]))
+            subtotal = order.total
+
+        # Resumen
+        builder._add_section("Resumen")
+        discount = order.discount
+        tax = order.tax
+        total = subtotal - discount + tax
+
+        summary_data = [
+            ["Subtotal", _money(subtotal, currency)],
+            ["Descuento", f"-{_money(discount, currency)}"],
+            ["Impuestos", _money(tax, currency)],
+            ["TOTAL", _money(total, currency)],
+            ["Anticipo", f"-{_money(order.advance_payment, currency)}"],
+            ["SALDO PENDIENTE", _money(total - order.advance_payment, currency)],
+        ]
+        builder.story.append(builder._build_table(
+            ["Concepto", "Monto"],
+            summary_data,
+            col_widths=[8 * cm, 5 * cm],
+        ))
+
+        # Notas
+        builder.story.append(Spacer(1, 10 * mm))
+        builder.story.append(Paragraph(
+            "Este presupuesto tiene una validez de 15 días a partir de la fecha de emisión.",
+            builder.styles["FooterStyle"],
+        ))
+        builder.story.append(Paragraph(
+            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            builder.styles["FooterStyle"],
+        ))
+
+        if not output_path:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            name_slug = _safe_filename(customer.full_name if customer else "Cliente")
+            output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Presupuesto.pdf")
+
+        return builder.save_to_file(output_path)
+
+
+class DeliveryReceiptPDFService:
+    """Generar comprobante de entrega de equipo."""
+
+    @staticmethod
+    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+        customer = order.customer
+        equipment = order.equipment
+        settings = _document_settings()
+        currency = settings["currency"]
+
+        builder = PDFBuilder(title=f"Comprobante de Entrega - {order.order_number}")
+        builder.add_header(
+            settings["workshop_name"],
+            order.technician or settings["technician_name"],
+            settings["workshop_address"],
+            settings["workshop_phone"],
+            settings["workshop_email"],
+            settings["logo_path"],
+        )
+
+        builder.story.append(Paragraph("COMPROBANTE DE ENTREGA", builder.styles["DocTitle"]))
+        builder.story.append(Spacer(1, 5 * mm))
+
+        # Datos de la orden
+        builder._add_section("Datos de la Orden")
+        builder._add_field("Nº Orden", order.order_number)
+        builder._add_field("Fecha de ingreso", order.intake_date.strftime("%Y-%m-%d") if order.intake_date else "")
+        builder._add_field("Fecha de entrega", datetime.now().strftime("%Y-%m-%d"))
+        builder._add_field("Estado final", order.status)
+
+        # Cliente
+        builder._add_section("Cliente")
+        if customer:
+            builder._add_field("Nombre", customer.full_name)
+            builder._add_field("Identificación", customer.id_number or "No registrada")
+            builder._add_field("Teléfono", customer.phone_primary)
+
+        # Equipo
+        builder._add_section("Equipo Entregado")
+        if equipment:
+            builder._add_field("Tipo", equipment.equipment_type)
+            builder._add_field("Marca/Modelo", f"{equipment.brand or ''} {equipment.model or ''}".strip())
+            builder._add_field("Nº Serie", equipment.serial_number or "No registrado")
+
+        # Trabajo realizado
+        if order.work_done_html:
+            builder._add_section("Trabajo Realizado")
+            builder.story.append(Paragraph(_plain_html(order.work_done_html), builder.styles["ValueStyle"]))
+
+        # Recomendaciones
+        if order.recommendations_html:
+            builder._add_section("Recomendaciones")
+            builder.story.append(Paragraph(_plain_html(order.recommendations_html), builder.styles["ValueStyle"]))
+
+        # Costos finales
+        builder._add_section("Resumen de Costos")
+        cost_data = [
+            ["Total", _money(order.total, currency)],
+            ["Anticipo", f"-{_money(order.advance_payment, currency)}"],
+            ["Pagado", f"-{_money(order.total - order.balance, currency)}"],
+            ["SALDO", _money(order.balance, currency)],
+        ]
+        builder.story.append(builder._build_table(
+            ["Concepto", "Monto"],
+            cost_data,
+            col_widths=[8 * cm, 5 * cm],
+        ))
+
+        # Garantía
+        builder._add_section("Garantía")
+        builder._add_field("Período de garantía", f"{order.warranty_days} días a partir de la fecha de entrega")
+
+        # Firmas
+        builder.add_signature_lines([("Cliente (recibe)", "Técnico (entrega)")])
+
+        # Pie
+        builder.story.append(Spacer(1, 10 * mm))
+        builder.story.append(Paragraph(
+            "El cliente declara haber recibido el equipo en satisfactorias condiciones.",
+            builder.styles["FooterStyle"],
+        ))
+        builder.story.append(Paragraph(
+            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            builder.styles["FooterStyle"],
+        ))
+
+        if not output_path:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            name_slug = _safe_filename(customer.full_name if customer else "Cliente")
+            output_path = str(Path(get_data_dir()) / "reports" / f"{ts}_{name_slug}_Comprobante-Entrega.pdf")
 
         return builder.save_to_file(output_path)

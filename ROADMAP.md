@@ -1,6 +1,6 @@
 # Roadmap de JL Mantenimiento
 
-Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P0 (backups seguros, presupuestos persistentes, ampliación de pruebas).
+Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P1 (recepción completa, ficha de cliente, documentos PDF, migraciones Alembic).
 
 Leyenda:
 
@@ -22,7 +22,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Lanzador Linux `./run.sh`.
 - [x] Entrada instalable `jl-mantenimiento` definida en `pyproject.toml`.
 - [x] Funcionamiento sin conexión a internet.
-- [ ] Configuración completa y operativa de Alembic con revisiones versionadas.
+- [x] Configuración completa y operativa de Alembic con revisiones versionadas
+  (`alembic.ini`, `env.py`, `script.py.mako`, migración inicial `001`).
 - [ ] Internacionalización real mediante catálogos de traducción.
 
 ## 2. Base de datos
@@ -40,7 +41,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Eliminación lógica de clientes y órdenes.
 - [x] Papelera y restauración de órdenes.
 - [x] Reinicio controlado de la conexión para pruebas aisladas.
-- [ ] Migraciones Alembic reproducibles para actualizar instalaciones existentes.
+- [x] Migraciones Alembic reproducibles para actualizar instalaciones existentes
+  (revisión `001_initial_schema` con todas las tablas del esquema actual).
 - [ ] Política de cierre explícito de sesiones de larga duración en widgets.
 - [ ] Índices y medición de rendimiento con bases de datos grandes.
 
@@ -87,7 +89,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Integración segura entre sesiones SQLAlchemy de páginas y diálogos.
 - [ ] Validar formato de teléfono y correo.
 - [ ] Advertir posibles duplicados por teléfono, además de identificación.
-- [ ] Ficha completa con equipos, órdenes, pagos, saldos y última visita.
+- [x] Ficha completa con equipos, órdenes, pagos, saldos y última visita
+  (`CustomerDetailDialog` con pestañas de órdenes, equipos y pagos/saldos).
 - [ ] Mostrar órdenes anteriores dentro de Nueva recepción.
 - [ ] Papelera y restauración de clientes desde la UI.
 
@@ -115,10 +118,11 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Capturar prioridad, técnico, costo de diagnóstico, anticipo y estado inicial.
 - [x] Usar técnico y garantía predeterminados desde Configuración.
 - [x] Crear cliente, equipo, orden, pago inicial e historial.
-- [ ] Validar que la fecha estimada no sea anterior al ingreso.
-- [ ] Validar que el anticipo no supere el total o manejar crédito explícitamente.
-- [ ] Importar fotografías durante la recepción, antes de guardar la orden.
-- [ ] Pantalla de confirmación previa con resumen y número que se generará.
+- [x] Validar que la fecha estimada no sea anterior al ingreso.
+- [x] Validar que el anticipo no supere el costo de diagnóstico.
+- [x] Importar fotografías durante la recepción, antes de guardar la orden
+  (selección de archivos o carpeta completa, importación automática tras crear la orden).
+- [x] Pantalla de confirmación previa con resumen y número que se generará.
 - [ ] Variantes de campos/accesorios más completas por tipo de equipo.
 - [ ] Transacción atómica: revertir cliente/equipo si falla la creación final.
 
@@ -235,8 +239,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Escape de caracteres especiales en datos ingresados por usuarios.
 - [x] Impresión de resumen mediante `QPrintDialog`.
 - [x] Vista previa desde el editor enriquecido.
-- [ ] PDF de presupuesto.
-- [ ] Comprobante de entrega.
+- [x] PDF de presupuesto (`BudgetPDFService` con tabla de conceptos, resumen y saldo).
+- [x] Comprobante de entrega (`DeliveryReceiptPDFService` con trabajo realizado,
+  costos finales, garantía y firmas).
 - [ ] PDF del historial completo.
 - [ ] Condiciones del servicio configurables en comprobante.
 - [ ] Tamaño Carta y formato móvil 63 × 110 mm.
@@ -403,10 +408,14 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   descuentos se aplican en el recálculo.
 - [x] **P0 — Ampliar pruebas:** 18 pruebas nuevas que cubren backups seguros,
   presupuestos persistentes, papelera/restauración e historial global.
-- [ ] **P1 — Recepción completa:** fotos antes de guardar, validaciones y resumen.
-- [ ] **P1 — Ficha de cliente:** órdenes, equipos, pagos, saldos y visitas.
-- [ ] **P1 — Documentos faltantes:** presupuesto y comprobante de entrega.
-- [ ] **P1 — Migraciones:** convertir el esquema actual en revisiones Alembic.
+- [x] **P1 — Recepción completa:** validación de fechas y anticipo, importación de
+  fotos durante la recepción y pantalla de confirmación con resumen.
+- [x] **P1 — Ficha de cliente:** `CustomerDetailDialog` con pestañas de órdenes,
+  equipos, pagos/saldos y última visita.
+- [x] **P1 — Documentos faltantes:** `BudgetPDFService` (presupuesto con conceptos)
+  y `DeliveryReceiptPDFService` (comprobante de entrega).
+- [x] **P1 — Migraciones:** infraestructura Alembic operativa con `alembic.ini`,
+  `env.py`, plantilla Mako y revisión inicial `001_initial_schema`.
 - [ ] **P2 — Empaquetado real:** limpiar artefactos, completar AppImage/PyInstaller
   y probar plataformas objetivo.
 - [ ] **P2 — Accesibilidad, traducciones y persistencia de preferencias visuales.**

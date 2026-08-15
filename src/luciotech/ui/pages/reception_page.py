@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QDoubleSpinBox,
     QTabWidget,
+    QFileDialog,
 )
 
 from luciotech.config import PRIORITIES, ORDER_STATUSES, ACCESSORIES_BY_TYPE
@@ -32,6 +34,8 @@ from luciotech.database.models import Customer, Equipment
 from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
 from luciotech.services.settings_service import SettingsService
 from luciotech.ui.dialogs.customer_dialog import CustomerSelectDialog
+
+VALID_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"}
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,7 @@ class ReceptionPage(QWidget):
         self._settings_service = SettingsService()
         self._selected_customer: Customer | None = None
         self._accessory_checks: list[QCheckBox] = []
+        self._pending_photos: list[str] = []
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -74,6 +79,10 @@ class ReceptionPage(QWidget):
         # Sección: Recepción
         reception_group = self._create_reception_section()
         form_layout.addWidget(reception_group)
+
+        # Sección: Fotografías
+        photos_group = self._create_photos_section()
+        form_layout.addWidget(photos_group)
 
         scroll.setWidget(form_container)
         layout.addWidget(scroll)
@@ -242,6 +251,32 @@ class ReceptionPage(QWidget):
 
         return group
 
+    def _create_photos_section(self) -> QGroupBox:
+        group = QGroupBox("Fotografías del equipo (opcional)")
+        layout = QVBoxLayout(group)
+
+        btn_layout = QHBoxLayout()
+        self._btn_add_photos = QPushButton("📷 Seleccionar archivos")
+        self._btn_add_photos.clicked.connect(self._import_photos)
+        btn_layout.addWidget(self._btn_add_photos)
+
+        self._btn_add_folder = QPushButton("📁 Desde carpeta")
+        self._btn_add_folder.clicked.connect(self._import_photos_from_folder)
+        btn_layout.addWidget(self._btn_add_folder)
+
+        self._btn_clear_photos = QPushButton("🗑 Limpiar")
+        self._btn_clear_photos.clicked.connect(self._clear_photos)
+        btn_layout.addWidget(self._btn_clear_photos)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        self._photos_label = QLabel("Ninguna foto seleccionada")
+        self._photos_label.setStyleSheet("color: palette(mid); padding: 4px;")
+        layout.addWidget(self._photos_label)
+
+        return group
+
     def _on_type_changed(self, equip_type: str) -> None:
         """Actualizar accesorios según tipo de equipo."""
         # Limpiar checkboxes anteriores
@@ -299,21 +334,124 @@ class ReceptionPage(QWidget):
             parts.append(other)
         return ", ".join(parts)
 
-    def _save_reception(self) -> None:
-        """Guardar la recepción completa."""
-        # Validar
-        if not self._selected_customer:
-            QMessageBox.warning(self, "Error", "Debe seleccionar o crear un cliente.")
+    def _import_photos(self) -> None:
+        """Seleccionar archivos de imagen para importar tras crear la orden."""
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Seleccionar fotografías", "",
+            "Imágenes (*.jpg *.jpeg *.png *.bmp *.gif *.webp *.tiff);;Todos los archivos (*)",
+        )
+        if not files:
             return
+        valid = [f for f in files if Path(f).suffix.lower() in VALID_PHOTO_EXTENSIONS]
+        self._pending_photos.extend(valid)
+        self._update_photos_label()
+
+    def _import_photos_from_folder(self) -> None:
+        """Importar todas las imágenes de una carpeta."""
+        folder = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de fotografías")
+        if not folder:
+            return
+        from pathlib import Path as _Path
+        valid = [
+            str(p) for p in _Path(folder).iterdir()
+            if p.is_file() and p.suffix.lower() in VALID_PHOTO_EXTENSIONS
+        ]
+        self._pending_photos.extend(valid)
+        self._update_photos_label()
+
+    def _clear_photos(self) -> None:
+        self._pending_photos.clear()
+        self._update_photos_label()
+
+    def _update_photos_label(self) -> None:
+        count = len(self._pending_photos)
+        if count == 0:
+            self._photos_label.setText("Ninguna foto seleccionada")
+        else:
+            self._photos_label.setText(f"{count} fotografía(s) seleccionada(s)")
+
+    def _import_pending_photos(self, order_id: int, order_number: str) -> None:
+        """Importar las fotos pendientes tras crear la orden."""
+        if not self._pending_photos:
+            return
+        try:
+            from luciotech.services.image_service import PhotoService
+            photo_svc = PhotoService()
+            photo_svc.add_photos(order_id, order_number, self._pending_photos, "Estado al recibir")
+            logger.info("%d fotos importadas para orden %s", len(self._pending_photos), order_number)
+        except Exception:
+            logger.exception("Error importando fotos de la recepción")
+
+    def _validate_form(self) -> str | None:
+        """Validar el formulario. Retorna mensaje de error o None si es válido."""
+        if not self._selected_customer:
+            return "Debe seleccionar o crear un cliente."
 
         problem = self._equip_problem.toPlainText().strip()
         if not problem:
-            QMessageBox.warning(self, "Error", "Debe describir el problema reportado.")
+            return "Debe describir el problema reportado."
+
+        if not self._equip_type.currentText().strip():
+            return "Debe seleccionar un tipo de equipo."
+
+        # Validar fecha estimada
+        if self._recv_estimated.date().isValid() and self._recv_estimated.date().year() > 2000:
+            estimated = self._recv_estimated.date()
+            intake = self._recv_date.date()
+            if estimated < intake:
+                return "La fecha estimada de entrega no puede ser anterior a la fecha de ingreso."
+
+        # Validar anticipo
+        diag_cost = self._recv_diag_cost.value()
+        advance = self._recv_advance.value()
+        if advance > 0 and diag_cost > 0 and advance > diag_cost:
+            return "El anticipo no puede superar el costo de diagnóstico."
+
+        return None
+
+    def _show_confirmation(self, order_number: str, customer_name: str, equipment_info: str, total: float) -> bool:
+        """Mostrar pantalla de confirmación antes de guardar."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Confirmar recepción")
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setText("Revise los datos antes de guardar:")
+        msg.setDetailedText(
+            f"Número de orden: {order_number}\n"
+            f"Cliente: {customer_name}\n"
+            f"Equipo: {equipment_info}\n"
+            f"Costo diagnóstico: ${self._recv_diag_cost.value():,.2f}\n"
+            f"Anticipo: ${self._recv_advance.value():,.2f}\n"
+            f"Saldo: ${total:,.2f}"
+        )
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Confirmar")
+        msg.button(QMessageBox.StandardButton.No).setText("Cancelar")
+        return msg.exec() == QMessageBox.StandardButton.Yes
+
+    def _save_reception(self) -> None:
+        """Guardar la recepción completa."""
+        error = self._validate_form()
+        if error:
+            QMessageBox.warning(self, "Error", error)
             return
 
         try:
-            # Crear o actualizar cliente con datos del formulario
+            # Generar número de orden para la confirmación
+            order_number = self._order_service.generate_order_number()
             customer = self._selected_customer
+            equipment_info = (
+                f"{self._equip_type.currentText()} "
+                f"{self._equip_brand.text()} {self._equip_model.text()}".strip()
+            )
+            diag_cost = self._recv_diag_cost.value()
+            advance = self._recv_advance.value()
+            balance = diag_cost - advance
+
+            if not self._show_confirmation(order_number, customer.full_name, equipment_info, balance):
+                return
+
+            # Actualizar cliente con datos del formulario
             customer = self._customer_service.update_customer(
                 customer,
                 full_name=customer.full_name,
@@ -326,6 +464,7 @@ class ReceptionPage(QWidget):
             )
 
             # Crear equipo
+            problem = self._equip_problem.toPlainText().strip()
             equipment = self._equipment_service.create_equipment(
                 customer_id=customer.id,
                 equipment_type=self._equip_type.currentText(),
@@ -365,11 +504,14 @@ class ReceptionPage(QWidget):
                 estimated_delivery_date=estimated_date,
                 priority=self._recv_priority.currentText(),
                 technician=self._recv_technician.text(),
-                diagnostic_cost=self._recv_diag_cost.value(),
-                advance_payment=self._recv_advance.value(),
+                diagnostic_cost=diag_cost,
+                advance_payment=advance,
                 status=self._recv_status.currentText(),
                 reported_problem=problem,
             )
+
+            # Importar fotos pendientes
+            self._import_pending_photos(order.id, order.order_number)
 
             QMessageBox.information(
                 self,
@@ -409,6 +551,8 @@ class ReceptionPage(QWidget):
         )
         for cb in self._accessory_checks:
             cb.setChecked(False)
+        self._pending_photos.clear()
+        self._update_photos_label()
 
     def refresh_settings(self) -> None:
         """Aplicar catálogos y valores predeterminados recién guardados."""

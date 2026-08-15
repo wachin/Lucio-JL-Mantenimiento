@@ -59,6 +59,11 @@ class CustomersPage(QWidget):
         self._btn_edit.clicked.connect(self._edit_selected_customer)
         actions.addWidget(self._btn_edit)
 
+        self._btn_detail = QPushButton("Ver ficha")
+        self._btn_detail.setEnabled(False)
+        self._btn_detail.clicked.connect(self._show_customer_detail)
+        actions.addWidget(self._btn_detail)
+
         self._btn_refresh = QPushButton("Actualizar")
         self._btn_refresh.clicked.connect(self._load_customers)
         actions.addWidget(self._btn_refresh)
@@ -131,7 +136,17 @@ class CustomersPage(QWidget):
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _update_actions(self) -> None:
-        self._btn_edit.setEnabled(self._selected_customer() is not None)
+        has_selection = self._selected_customer() is not None
+        self._btn_edit.setEnabled(has_selection)
+        self._btn_detail.setEnabled(has_selection)
+
+    def _show_customer_detail(self) -> None:
+        customer = self._selected_customer()
+        if customer is None:
+            return
+        from luciotech.ui.dialogs.customer_detail_dialog import CustomerDetailDialog
+        dialog = CustomerDetailDialog(customer, self)
+        dialog.exec()
 
     def _create_customer(self) -> None:
         dialog = CustomerSelectDialog(self)
