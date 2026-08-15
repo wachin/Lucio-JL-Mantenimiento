@@ -83,6 +83,7 @@ def upgrade() -> None:
         sa.Column("advance_payment", sa.Float(), nullable=False, server_default="0"),
         sa.Column("balance", sa.Float(), nullable=False, server_default="0"),
         sa.Column("warranty_days", sa.Integer(), nullable=False, server_default="30"),
+        sa.Column("budget_status", sa.String(30), nullable=True, server_default="Pendiente"),
         sa.Column("internal_notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),

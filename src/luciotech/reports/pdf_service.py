@@ -12,7 +12,7 @@ from typing import Sequence
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 from reportlab.platypus import (
@@ -34,6 +34,32 @@ logger = logging.getLogger(__name__)
 
 # Tamaño de celda para miniaturas en PDF
 THUMB_SIZE_PDF = 45 * mm
+
+# Tamaño de página móvil (63x110 mm)
+MOBILE_PAGE_SIZE = (63 * mm, 110 * mm)
+
+# Mapa de nombres de tamaño de página a tuplas de reportlab
+PAGE_SIZE_MAP: dict[str, tuple[float, float]] = {
+    "A4": A4,
+    "CARTA": letter,
+    "LETTER": letter,
+    "MOVIL": MOBILE_PAGE_SIZE,
+    "MOBILE": MOBILE_PAGE_SIZE,
+}
+
+
+def _resolve_page_size(page_size_name: str | None = None) -> tuple[tuple[float, float], bool]:
+    """Resolver el tamaño de página desde un nombre o la configuración.
+
+    Retorna (page_size_tuple, is_mobile).
+    """
+    if page_size_name is None:
+        settings = SettingsService()
+        page_size_name = settings.get("pdf_page_size", "A4").strip().upper()
+
+    normalized = page_size_name.upper().strip()
+    is_mobile = normalized in ("MOVIL", "MOBILE")
+    return PAGE_SIZE_MAP.get(normalized, A4), is_mobile
 
 
 def _document_settings() -> dict[str, str]:
@@ -71,12 +97,20 @@ class PDFBuilder:
         title: str = "",
         page_size=A4,
         orientation: str = "portrait",
-        margins: tuple[float, float, float, float] = (2 * cm, 2 * cm, 2 * cm, 2 * cm),
+        margins: tuple[float, float, float, float] | None = None,
+        is_mobile: bool = False,
     ) -> None:
         self.title = title
         self.page_size = page_size
+        self.is_mobile = is_mobile
         if orientation == "landscape":
             self.page_size = (page_size[1], page_size[0])
+        # Mobile gets smaller margins automatically
+        if margins is None:
+            if is_mobile:
+                margins = (8 * mm, 8 * mm, 10 * mm, 10 * mm)
+            else:
+                margins = (2 * cm, 2 * cm, 2 * cm, 2 * cm)
         self.margins = margins
         self.buffer = BytesIO()
         self.doc = SimpleDocTemplate(
@@ -98,20 +132,29 @@ class PDFBuilder:
 
     def _setup_styles(self) -> None:
         """Configurar estilos personalizados."""
+        # Mobile uses smaller fonts to fit content in the narrow page
+        title_size = 14 if self.is_mobile else 20
+        section_size = 10 if self.is_mobile else 13
+        label_size = 7 if self.is_mobile else 9
+        value_size = 8 if self.is_mobile else 10
+        title_space_after = 3 * mm if self.is_mobile else 6 * mm
+        section_space_before = 4 * mm if self.is_mobile else 8 * mm
+        section_space_after = 2 * mm if self.is_mobile else 4 * mm
+
         self.styles.add(ParagraphStyle(
             name="DocTitle",
             parent=self.styles["Title"],
-            fontSize=20,
-            spaceAfter=6 * mm,
+            fontSize=title_size,
+            spaceAfter=title_space_after,
             alignment=TA_CENTER,
             textColor=colors.HexColor("#1a1a2e"),
         ))
         self.styles.add(ParagraphStyle(
             name="SectionHeader",
             parent=self.styles["Heading2"],
-            fontSize=13,
-            spaceBefore=8 * mm,
-            spaceAfter=4 * mm,
+            fontSize=section_size,
+            spaceBefore=section_space_before,
+            spaceAfter=section_space_after,
             textColor=colors.HexColor("#16213e"),
             borderWidth=1,
             borderColor=colors.HexColor("#0f3460"),
@@ -120,20 +163,20 @@ class PDFBuilder:
         self.styles.add(ParagraphStyle(
             name="LabelStyle",
             parent=self.styles["Normal"],
-            fontSize=9,
+            fontSize=label_size,
             textColor=colors.HexColor("#555"),
             fontName="Helvetica-Bold",
         ))
         self.styles.add(ParagraphStyle(
             name="ValueStyle",
             parent=self.styles["Normal"],
-            fontSize=10,
+            fontSize=value_size,
             spaceAfter=2 * mm,
         ))
         self.styles.add(ParagraphStyle(
             name="FooterStyle",
             parent=self.styles["Normal"],
-            fontSize=8,
+            fontSize=6 if self.is_mobile else 8,
             textColor=colors.HexColor("#888"),
             alignment=TA_CENTER,
         ))
@@ -158,8 +201,9 @@ class PDFBuilder:
 
     def _build_table(self, headers: list[str], data: list[list[str]], col_widths: list[float] | None = None) -> Table:
         """Crear tabla con encabezado estilizado."""
-        header_style = ParagraphStyle("HeaderCell", fontSize=9, textColor=colors.white, fontName="Helvetica-Bold", alignment=TA_CENTER)
-        cell_style = ParagraphStyle("CellData", fontSize=9, fontName="Helvetica", alignment=TA_LEFT)
+        table_font_size = 7 if self.is_mobile else 9
+        header_style = ParagraphStyle("HeaderCell", fontSize=table_font_size, textColor=colors.white, fontName="Helvetica-Bold", alignment=TA_CENTER)
+        cell_style = ParagraphStyle("CellData", fontSize=table_font_size, fontName="Helvetica", alignment=TA_LEFT)
 
         header_cells = [Paragraph(escape(str(h)), header_style) for h in headers]
         rows = [header_cells]
@@ -174,15 +218,15 @@ class PDFBuilder:
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-            ("TOPPADDING", (0, 0), (-1, 0), 6),
+            ("FONTSIZE", (0, 0), (-1, -1), table_font_size),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 6 if not self.is_mobile else 3),
+            ("TOPPADDING", (0, 0), (-1, 0), 6 if not self.is_mobile else 3),
             ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8f8f8")),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ccc")),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8f8f8"), colors.white]),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4 if not self.is_mobile else 2),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4 if not self.is_mobile else 2),
         ]))
         return table
 
@@ -330,13 +374,14 @@ class ReceiptPDFService:
     """Generar comprobante de recepción."""
 
     @staticmethod
-    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+    def generate(order: ServiceOrder, output_path: str | None = None, page_size: str | None = None) -> str:
         customer = order.customer
         equipment = order.equipment
         photos = order.photos[:6]  # Max 6 en comprobante
         settings = _document_settings()
 
-        builder = PDFBuilder(title=f"Comprobante de Recepción - {order.order_number}")
+        resolved_size, is_mobile = _resolve_page_size(page_size)
+        builder = PDFBuilder(title=f"Comprobante de Recepción - {order.order_number}", page_size=resolved_size, is_mobile=is_mobile)
 
         # Encabezado
         builder.add_header(
@@ -428,13 +473,14 @@ class TechnicalReportPDFService:
     """Generar informe técnico."""
 
     @staticmethod
-    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+    def generate(order: ServiceOrder, output_path: str | None = None, page_size: str | None = None) -> str:
         customer = order.customer
         equipment = order.equipment
         photos = order.photos
         settings = _document_settings()
 
-        builder = PDFBuilder(title=f"Informe Técnico - {order.order_number}")
+        resolved_size, is_mobile = _resolve_page_size(page_size)
+        builder = PDFBuilder(title=f"Informe Técnico - {order.order_number}", page_size=resolved_size, is_mobile=is_mobile)
         builder.add_header(
             settings["workshop_name"],
             order.technician or settings["technician_name"],
@@ -535,13 +581,14 @@ class BudgetPDFService:
     """Generar PDF de presupuesto con conceptos detallados."""
 
     @staticmethod
-    def generate(order: ServiceOrder, concepts: Sequence[BudgetConcept], output_path: str | None = None) -> str:
+    def generate(order: ServiceOrder, concepts: Sequence[BudgetConcept], output_path: str | None = None, page_size: str | None = None) -> str:
         customer = order.customer
         equipment = order.equipment
         settings = _document_settings()
         currency = settings["currency"]
 
-        builder = PDFBuilder(title=f"Presupuesto - {order.order_number}")
+        resolved_size, is_mobile = _resolve_page_size(page_size)
+        builder = PDFBuilder(title=f"Presupuesto - {order.order_number}", page_size=resolved_size, is_mobile=is_mobile)
         builder.add_header(
             settings["workshop_name"],
             order.technician or settings["technician_name"],
@@ -636,13 +683,14 @@ class DeliveryReceiptPDFService:
     """Generar comprobante de entrega de equipo."""
 
     @staticmethod
-    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+    def generate(order: ServiceOrder, output_path: str | None = None, page_size: str | None = None) -> str:
         customer = order.customer
         equipment = order.equipment
         settings = _document_settings()
         currency = settings["currency"]
 
-        builder = PDFBuilder(title=f"Comprobante de Entrega - {order.order_number}")
+        resolved_size, is_mobile = _resolve_page_size(page_size)
+        builder = PDFBuilder(title=f"Comprobante de Entrega - {order.order_number}", page_size=resolved_size, is_mobile=is_mobile)
         builder.add_header(
             settings["workshop_name"],
             order.technician or settings["technician_name"],
@@ -730,13 +778,14 @@ class HistoryPDFService:
     """Generar PDF con el historial completo de una orden."""
 
     @staticmethod
-    def generate(order: ServiceOrder, output_path: str | None = None) -> str:
+    def generate(order: ServiceOrder, output_path: str | None = None, page_size: str | None = None) -> str:
         customer = order.customer
         equipment = order.equipment
         settings = _document_settings()
         currency = settings["currency"]
 
-        builder = PDFBuilder(title=f"Historial - {order.order_number}")
+        resolved_size, is_mobile = _resolve_page_size(page_size)
+        builder = PDFBuilder(title=f"Historial - {order.order_number}", page_size=resolved_size, is_mobile=is_mobile)
         builder.add_header(
             settings["workshop_name"],
             order.technician or settings["technician_name"],

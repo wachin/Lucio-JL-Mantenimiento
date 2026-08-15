@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import csv
 import logging
+import tempfile
 from datetime import datetime, date
 from pathlib import Path
 from io import StringIO
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -26,7 +28,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QTabWidget,
 )
-from PyQt6.QtGui import QKeySequence
+from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 
 from sqlalchemy import func
 
@@ -130,6 +132,10 @@ class ReportsPage(QWidget):
         self._btn_export_csv = QPushButton("📊 Exportar CSV")
         self._btn_export_csv.clicked.connect(self._export_csv)
         export_layout.addWidget(self._btn_export_csv)
+
+        self._btn_print = QPushButton("🖨️ Imprimir")
+        self._btn_print.clicked.connect(self._print_report)
+        export_layout.addWidget(self._btn_print)
 
         self._lbl_count = QLabel("0 registros")
         export_layout.addWidget(self._lbl_count)
@@ -296,3 +302,25 @@ class ReportsPage(QWidget):
 
         QMessageBox.information(self, "CSV exportado", f"Reporte guardado en:\n{path}")
         logger.info("Reporte CSV exportado: %s", path)
+
+    def _print_report(self) -> None:
+        """Imprimir el reporte actual."""
+        if not self._current_data:
+            QMessageBox.warning(self, "Sin datos", "Genere un reporte primero.")
+            return
+
+        # Generar PDF temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp_path = tmp.name
+
+        try:
+            builder = PDFBuilder(title="Reporte de órdenes")
+            builder.story.append(builder._build_table(self._current_headers, self._current_data))
+            builder.save_to_file(tmp_path)
+
+            # Abrir con el visor del sistema para imprimir
+            QDesktopServices.openUrl(QUrl.fromLocalFile(tmp_path))
+            logger.info("Reporte PDF abierto para impresión: %s", tmp_path)
+        except Exception as e:
+            logger.error("Error al generar PDF para impresión: %s", e)
+            QMessageBox.critical(self, "Error", f"No se pudo generar el PDF para impresión:\n{e}")

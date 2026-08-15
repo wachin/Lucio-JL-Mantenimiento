@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from luciotech.config import ORDER_STATUSES
 from luciotech.database.models import Payment, ServiceOrder
 from luciotech.services.order_service import OrderService
+from luciotech.utils import format_money
 
 
 FINAL_STATUSES = {"Entregado", "Cancelado", "No reparable"}
@@ -167,7 +168,7 @@ class HomePage(QWidget):
         self._active_value.setText(str(len(active)))
         self._ready_value.setText(str(len(ready)))
         self._overdue_value.setText(str(len(overdue)))
-        self._balance_value.setText(f"${balance:,.2f}")
+        self._balance_value.setText(format_money(balance))
 
         # New indicators
         today = now.date()
@@ -195,7 +196,7 @@ class HomePage(QWidget):
             for payment in order.payments
             if month_start <= payment.payment_date < month_end
         )
-        self._month_income_value.setText(f"${month_income:,.2f}")
+        self._month_income_value.setText(format_money(month_income))
 
         upcoming_deadline = now + timedelta(days=7)
         upcoming_deliveries = [
@@ -238,7 +239,7 @@ class HomePage(QWidget):
                 )
             self._recent_table.setItem(row, 3, QTableWidgetItem(equipment_text))
             self._recent_table.setItem(row, 4, QTableWidgetItem(order.status))
-            self._recent_table.setItem(row, 5, QTableWidgetItem(f"${order.balance:,.2f}"))
+            self._recent_table.setItem(row, 5, QTableWidgetItem(format_money(order.balance)))
 
     def _open_recent_order(self, row: int, _column: int) -> None:
         item = self._recent_table.item(row, 0)

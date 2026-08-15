@@ -520,7 +520,7 @@ class ReceptionPage(QWidget):
 
                 # Crear equipo
                 problem = self._equip_problem.toPlainText().strip()
-                equipment = self._equipment_service.create_equipment(
+                equipment, equipment_warnings = self._equipment_service.create_equipment(
                     customer_id=customer.id,
                     equipment_type=self._equip_type.currentText(),
                     brand=self._equip_brand.text(),
@@ -592,6 +592,16 @@ class ReceptionPage(QWidget):
                 "Orden creada",
                 f"Orden {order.order_number} creada exitosamente.",
             )
+
+            # Advertencia no bloqueante si hubo duplicado de número de serie
+            if equipment_warnings:
+                QMessageBox.warning(
+                    self,
+                    "Número de serie duplicado",
+                    "\n".join(equipment_warnings)
+                    + "\n\nLa orden se guardó correctamente.",
+                )
+
             self.order_created.emit(order.id)
             self._clear_form()
 

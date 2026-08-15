@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -25,6 +26,10 @@ class Customer(Base):
     """Cliente del taller."""
 
     __tablename__ = "customers"
+    __table_args__ = (
+        Index("ix_customers_is_deleted", "is_deleted"),
+        Index("ix_customers_full_name", "full_name"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     full_name = Column(String(200), nullable=False)
@@ -78,6 +83,13 @@ class ServiceOrder(Base):
     """Orden de servicio."""
 
     __tablename__ = "service_orders"
+    __table_args__ = (
+        Index("ix_service_orders_status", "status"),
+        Index("ix_service_orders_customer_id", "customer_id"),
+        Index("ix_service_orders_is_deleted", "is_deleted"),
+        Index("ix_service_orders_intake_date", "intake_date"),
+        Index("ix_service_orders_order_number", "order_number"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_number = Column(String(30), unique=True, nullable=False)
@@ -104,6 +116,7 @@ class ServiceOrder(Base):
     advance_payment = Column(Float, default=0.0, nullable=False)
     balance = Column(Float, default=0.0, nullable=False)
     warranty_days = Column(Integer, default=30, nullable=False)
+    budget_status = Column(String(30), default="Pendiente", nullable=True)
     internal_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
@@ -117,6 +130,7 @@ class ServiceOrder(Base):
     events = relationship("HistoryEvent", back_populates="order", lazy="select", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", lazy="select", cascade="all, delete-orphan")
     budget_concepts = relationship("BudgetConcept", back_populates="order", lazy="select", cascade="all, delete-orphan")
+    field_changes = relationship("FieldChange", back_populates="order", lazy="select", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<ServiceOrder(number='{self.order_number}', status='{self.status}')>"
@@ -126,6 +140,9 @@ class Photo(Base):
     """Fotografía adjunta a una orden."""
 
     __tablename__ = "photos"
+    __table_args__ = (
+        Index("ix_photos_order_id", "order_id"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False)
@@ -185,6 +202,10 @@ class Payment(Base):
     """Pago registrado para una orden."""
 
     __tablename__ = "payments"
+    __table_args__ = (
+        Index("ix_payments_order_id", "order_id"),
+        Index("ix_payments_payment_date", "payment_date"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False)
@@ -194,11 +215,13 @@ class Payment(Base):
     amount = Column(Float, nullable=False)
     reference = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
+    is_voided = Column(Boolean, default=False, nullable=False)
+    void_reason = Column(Text, nullable=True)
 
     order = relationship("ServiceOrder", back_populates="payments", lazy="select")
 
     def __repr__(self) -> str:
-        return f"<Payment(id={self.id}, amount={self.amount}, type='{self.payment_type}')>"
+        return f"<Payment(id={self.id}, amount={self.amount}, type='{self.payment_type}', voided={self.is_voided})>"
 
 
 class BudgetConcept(Base):
@@ -220,6 +243,26 @@ class BudgetConcept(Base):
 
     def __repr__(self) -> str:
         return f"<BudgetConcept(id={self.id}, type='{self.concept_type}', subtotal={self.subtotal})>"
+
+
+
+class FieldChange(Base):
+    """Auditoría de cambios individuales en campos de una orden."""
+
+    __tablename__ = "field_changes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False)
+    field_name = Column(String(100), nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    changed_at = Column(DateTime, default=datetime.now, nullable=False)
+    user = Column(String(100), nullable=True)
+
+    order = relationship("ServiceOrder", back_populates="field_changes", lazy="select")
+
+    def __repr__(self) -> str:
+        return f"<FieldChange(order={self.order_id}, field='{self.field_name}')>"
 
 
 class Settings(Base):

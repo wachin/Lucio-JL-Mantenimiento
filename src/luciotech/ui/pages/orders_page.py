@@ -26,12 +26,14 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QMenu,
     QFileDialog,
+    QInputDialog,
 )
 from PyQt6.QtGui import QKeySequence
 
 from luciotech.config import ORDER_STATUSES, PRIORITIES, get_data_dir
 from luciotech.database.models import ServiceOrder
 from luciotech.services.order_service import OrderService
+from luciotech.utils import format_money
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +101,14 @@ class OrdersPage(QWidget):
         self._btn_export.clicked.connect(self._export_to_csv)
         search_layout.addWidget(self._btn_export)
 
+        self._btn_batch = QPushButton("Acciones por lote")
+        self._btn_batch.setToolTip(
+            "Cambiar estado o exportar las órdenes seleccionadas (Ctrl+clic para selección múltiple)"
+        )
+        self._btn_batch.clicked.connect(self._on_batch_clicked)
+        self._btn_batch.setEnabled(False)
+        search_layout.addWidget(self._btn_batch)
+
         self._chk_trash = QCheckBox("Ver papelera")
         self._chk_trash.setToolTip("Mostrar las órdenes eliminadas")
         self._chk_trash.toggled.connect(self._on_trash_toggled)
@@ -159,12 +169,14 @@ class OrdersPage(QWidget):
         self._table.setColumnCount(len(self._column_labels))
         self._table.setHorizontalHeaderLabels(self._column_labels)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSortingEnabled(True)
         self._table.setAlternatingRowColors(True)
         self._table.doubleClicked.connect(self._on_double_click)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_context_menu)
+        self._table.itemSelectionChanged.connect(self._update_batch_button)
 
         # Configurar headers
         header = self._table.horizontalHeader()
@@ -270,8 +282,8 @@ class OrdersPage(QWidget):
             self._table.setItem(row, 8, QTableWidgetItem((order.reported_problem or "")[:80]))
             self._table.setItem(row, 9, QTableWidgetItem(order.status))
             self._table.setItem(row, 10, QTableWidgetItem(order.priority))
-            self._table.setItem(row, 11, QTableWidgetItem(f"${order.total:,.2f}"))
-            self._table.setItem(row, 12, QTableWidgetItem(f"${order.balance:,.2f}"))
+            self._table.setItem(row, 11, QTableWidgetItem(format_money(order.total)))
+            self._table.setItem(row, 12, QTableWidgetItem(format_money(order.balance)))
 
             # Color por estado
             status_color = self._get_status_color(order.status)
@@ -321,9 +333,27 @@ class OrdersPage(QWidget):
         if order is None:
             return
 
+        selected_orders = self._get_selected_orders()
+
         menu = QMenu(self)
         open_action = menu.addAction("Abrir orden")
         open_action.triggered.connect(lambda: self.order_opened.emit(order.id))
+
+        # Acciones por lote si hay más de una orden seleccionada
+        if len(selected_orders) > 1:
+            menu.addSeparator()
+            batch_status_action = menu.addAction(
+                f"Cambiar estado de {len(selected_orders)} órdenes…"
+            )
+            batch_status_action.triggered.connect(
+                lambda: self._batch_change_status(selected_orders)
+            )
+            batch_export_action = menu.addAction(
+                f"Exportar {len(selected_orders)} órdenes a CSV…"
+            )
+            batch_export_action.triggered.connect(
+                lambda: self._export_selected_to_csv(selected_orders)
+            )
 
         menu.addSeparator()
         if self._chk_trash.isChecked():
@@ -537,8 +567,8 @@ class OrdersPage(QWidget):
                         (order.reported_problem or "")[:80],
                         order.status,
                         order.priority,
-                        f"${order.total:,.2f}",
-                        f"${order.balance:,.2f}",
+                        format_money(order.total),
+                        format_money(order.balance),
                     ]
                     
                     # Solo columnas visibles
@@ -560,6 +590,157 @@ class OrdersPage(QWidget):
                 f"No se pudo exportar a CSV:\n{str(e)}",
             )
             logger.error("Error exportando CSV: %s", e)
+
+    def _get_selected_orders(self) -> list[ServiceOrder]:
+        """Devolver las órdenes correspondientes a las filas seleccionadas."""
+        orders: list[ServiceOrder] = []
+        for row in sorted({idx.row() for idx in self._table.selectedIndexes()}):
+            order = self._order_at_row(row)
+            if order is not None:
+                orders.append(order)
+        return orders
+
+    def _update_batch_button(self) -> None:
+        """Habilitar/deshabilitar el botón de acciones por lote según la selección."""
+        count = len(self._get_selected_orders())
+        self._btn_batch.setEnabled(count > 1)
+        if count > 1:
+            self._btn_batch.setText(f"Acciones por lote ({count})")
+        else:
+            self._btn_batch.setText("Acciones por lote")
+
+    def _on_batch_clicked(self) -> None:
+        """Mostrar menú de acciones por lote junto al botón."""
+        orders = self._get_selected_orders()
+        if len(orders) < 2:
+            QMessageBox.information(
+                self,
+                "Acciones por lote",
+                "Selecciona al menos dos órdenes para usar las acciones por lote.\n"
+                "Usa Ctrl+clic para selección múltiple.",
+            )
+            return
+
+        menu = QMenu(self)
+        status_action = menu.addAction(f"Cambiar estado de {len(orders)} órdenes…")
+        status_action.triggered.connect(lambda: self._batch_change_status(orders))
+        export_action = menu.addAction(f"Exportar {len(orders)} órdenes a CSV…")
+        export_action.triggered.connect(lambda: self._export_selected_to_csv(orders))
+        menu.exec(self._btn_batch.mapToGlobal(self._btn_batch.rect().bottomLeft()))
+
+    def _batch_change_status(self, orders: list[ServiceOrder]) -> None:
+        """Cambiar el estado de varias órdenes a la vez."""
+        if not orders:
+            return
+
+        new_status, ok = QInputDialog.getItem(
+            self,
+            "Cambiar estado por lote",
+            f"Nuevo estado para {len(orders)} orden(es):",
+            ORDER_STATUSES,
+            0,
+            False,
+        )
+        if not ok or not new_status:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirmar cambio de estado",
+            f"¿Cambiar el estado de {len(orders)} orden(es) a '{new_status}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        changed = 0
+        errors: list[str] = []
+        for order in orders:
+            try:
+                self._order_service.change_status(order, new_status, "Cambio masivo de estado")
+                changed += 1
+            except Exception as e:
+                errors.append(f"{order.order_number}: {e}")
+                logger.error("Error cambiando estado de %s: %s", order.order_number, e)
+
+        if errors:
+            QMessageBox.warning(
+                self,
+                "Cambio de estado parcial",
+                f"Se cambiaron {changed} de {len(orders)} órdenes.\n\n"
+                f"Errores:\n" + "\n".join(errors[:10]),
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Estado actualizado",
+                f"Se cambió el estado de {changed} orden(es) a '{new_status}'.",
+            )
+
+        self._load_orders()
+        self.orders_changed.emit()
+
+    def _export_selected_to_csv(self, orders: list[ServiceOrder]) -> None:
+        """Exportar a CSV solo las órdenes seleccionadas."""
+        if not orders:
+            QMessageBox.information(self, "Exportar", "No hay órdenes seleccionadas.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar selección a CSV",
+            f"ordenes_seleccionadas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            "CSV Files (*.csv);;All Files (*)",
+        )
+        if not file_path:
+            return
+
+        try:
+            header = self._table.horizontalHeader()
+            visible_columns = [
+                col_idx
+                for col_idx in range(self._table.columnCount())
+                if not header.isSectionHidden(col_idx)
+            ]
+
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                headers = [self._column_labels[c] for c in visible_columns]
+                writer.writerow(headers)
+
+                for order in orders:
+                    customer = order.customer
+                    equipment = order.equipment
+                    all_data = [
+                        order.order_number,
+                        order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else "",
+                        customer.full_name if customer else "",
+                        customer.phone_primary if customer else "",
+                        equipment.equipment_type if equipment else "",
+                        equipment.brand or "" if equipment else "",
+                        equipment.model or "" if equipment else "",
+                        equipment.serial_number or "" if equipment else "",
+                        (order.reported_problem or "")[:80],
+                        order.status,
+                        order.priority,
+                        format_money(order.total),
+                        format_money(order.balance),
+                    ]
+                    writer.writerow([all_data[c] for c in visible_columns])
+
+            QMessageBox.information(
+                self,
+                "Exportación exitosa",
+                f"Se exportaron {len(orders)} órdenes a:\n{file_path}",
+            )
+            logger.info("Órdenes seleccionadas exportadas a CSV: %s (%d)", file_path, len(orders))
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error al exportar",
+                f"No se pudo exportar a CSV:\n{str(e)}",
+            )
+            logger.error("Error exportando CSV seleccionado: %s", e)
 
     def cleanup(self) -> None:
         """Cerrar la sesión de base de datos asociada a esta página."""

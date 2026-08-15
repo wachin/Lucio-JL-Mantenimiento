@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 
 from luciotech.database.connection import get_session
-from luciotech.database.models import Customer, Equipment, ServiceOrder, StatusHistory, HistoryEvent, Payment
+from luciotech.database.models import Customer, Equipment, ServiceOrder, StatusHistory, HistoryEvent, Payment, FieldChange
 from luciotech.database.repositories import (
     CustomerRepo,
     EquipmentRepo,
@@ -15,6 +15,7 @@ from luciotech.database.repositories import (
     StatusHistoryRepo,
     HistoryEventRepo,
     PaymentRepo,
+    FieldChangeRepo,
 )
 from luciotech.services.settings_service import SettingsService
 
@@ -219,6 +220,27 @@ class EquipmentService:
     def search(self, query: str):
         return self.repo.search(query)
 
+    def check_duplicate_serial(self, serial_number: str, exclude_equipment_id: int | None = None) -> str | None:
+        """Comprobar si otro equipo tiene el mismo número de serie.
+
+        Devuelve un mensaje de advertencia si se encuentra duplicado, o None.
+        """
+        if not serial_number or not serial_number.strip():
+            return None
+        existing = self.find_by_serial(serial_number.strip())
+        if existing is None:
+            return None
+        if exclude_equipment_id is not None and existing.id == exclude_equipment_id:
+            return None
+        logger.warning(
+            "Número de serie '%s' ya registrado por equipo id=%s",
+            serial_number, existing.id,
+        )
+        return (
+            f"El número de serie '{serial_number}' ya está registrado "
+            f"por otro equipo (id={existing.id})."
+        )
+
     def create_equipment(
         self,
         customer_id: int,
@@ -233,12 +255,20 @@ class EquipmentService:
         physical_state: str = "",
         reported_problem: str = "",
         intake_notes: str = "",
-    ) -> Equipment:
-        """Crear un nuevo equipo."""
+    ) -> tuple[Equipment, list[str]]:
+        """Crear un nuevo equipo.
+
+        Devuelve una tupla ``(equipment, warnings)`` donde *warnings* es una
+        lista de mensajes no bloqueantes (serie duplicada, etc.).
+        """
         if not equipment_type.strip():
             raise ValueError("El tipo de equipo es obligatorio")
-        if serial_number.strip() and self.find_by_serial(serial_number.strip()):
-            raise ValueError("Ya existe otro equipo con ese número de serie")
+
+        warnings: list[str] = []
+        dup = self.check_duplicate_serial(serial_number)
+        if dup:
+            warnings.append(dup)
+
         equipment = Equipment(
             customer_id=customer_id,
             equipment_type=equipment_type,
@@ -253,10 +283,14 @@ class EquipmentService:
             reported_problem=reported_problem.strip() or None,
             intake_notes=intake_notes.strip() or None,
         )
-        return self.repo.create(equipment)
+        return self.repo.create(equipment), warnings
 
-    def update_equipment(self, equipment: Equipment, **kwargs) -> Equipment:
-        """Actualizar los datos editables de un equipo."""
+    def update_equipment(self, equipment: Equipment, **kwargs) -> tuple[Equipment, list[str]]:
+        """Actualizar los datos editables de un equipo.
+
+        Devuelve una tupla ``(equipment, warnings)`` donde *warnings* es una
+        lista de mensajes no bloqueantes (serie duplicada, etc.).
+        """
         equipment_type = str(
             kwargs.get("equipment_type", equipment.equipment_type)
         ).strip()
@@ -266,9 +300,11 @@ class EquipmentService:
         serial_number = str(
             kwargs.get("serial_number", equipment.serial_number) or ""
         ).strip()
-        duplicate = self.find_by_serial(serial_number) if serial_number else None
-        if duplicate is not None and duplicate.id != equipment.id:
-            raise ValueError("Ya existe otro equipo con ese número de serie")
+
+        warnings: list[str] = []
+        dup = self.check_duplicate_serial(serial_number, exclude_equipment_id=equipment.id)
+        if dup:
+            warnings.append(dup)
 
         equipment.equipment_type = equipment_type
         equipment.serial_number = serial_number or None
@@ -286,7 +322,7 @@ class EquipmentService:
             if key in kwargs:
                 value = str(kwargs[key] or "").strip()
                 setattr(equipment, key, value or None)
-        return self.repo.update(equipment)
+        return self.repo.update(equipment), warnings
 
 
 class OrderService:
@@ -298,6 +334,7 @@ class OrderService:
         self.status_repo = StatusHistoryRepo(self.session)
         self.event_repo = HistoryEventRepo(self.session)
         self.settings = SettingsService()
+        self.field_change_repo = FieldChangeRepo(self.session)
 
     def get_by_id(self, order_id: int):
         return self.order_repo.get_by_id(order_id)
@@ -402,14 +439,50 @@ class OrderService:
         logger.info("Orden creada: %s para cliente %s", order_number, customer.full_name)
         return order
 
-    def change_status(self, order: ServiceOrder, new_status: str, comment: str = "") -> ServiceOrder:
+    def change_status(self, order: ServiceOrder, new_status: str, comment: str = "", user: str = "") -> ServiceOrder:
         """Cambiar el estado de una orden."""
         old_status = order.status
         order.status = new_status
         self.order_repo.update(order)
         self._record_status_change(order, old_status, new_status, comment)
+        self._record_field_change(order, "status", old_status, new_status, user=user)
         logger.info("Estado cambiado: %s → %s (%s)", old_status, new_status, order.order_number)
         return order
+
+    def update_order_fields(self, order: ServiceOrder, user: str = "", **kwargs) -> ServiceOrder:
+        """Actualizar campos de una orden y registrar cada cambio en la auditoría.
+
+        Solo se auditan los campos que efectivamente cambian de valor.
+        """
+        auditable_fields = {
+            "status", "priority", "technician", "reported_problem",
+            "diagnostic_cost", "parts_cost", "labor_cost", "discount",
+            "tax", "total", "advance_payment", "balance", "warranty_days",
+            "internal_notes", "diagnosis_html", "work_done_html",
+            "recommendations_html", "parts_used", "estimated_delivery_date",
+            "completion_date", "delivery_date",
+        }
+        for field_name, new_value in kwargs.items():
+            if field_name not in auditable_fields:
+                setattr(order, field_name, new_value)
+                continue
+            old_value = getattr(order, field_name, None)
+            if str(old_value) != str(new_value):
+                self._record_field_change(order, field_name, str(old_value), str(new_value), user=user)
+            setattr(order, field_name, new_value)
+        self.order_repo.update(order)
+        return order
+
+    def _record_field_change(self, order: ServiceOrder, field_name: str, old_value: str, new_value: str, user: str = "") -> None:
+        """Registrar un cambio de campo en la auditoría."""
+        record = FieldChange(
+            order_id=order.id,
+            field_name=field_name,
+            old_value=old_value,
+            new_value=new_value,
+            user=user.strip() or None,
+        )
+        self.field_change_repo.create(record)
 
     def add_event(self, order: ServiceOrder, event_type: str, title: str, description: str = "", user: str = "") -> None:
         """Añadir un evento al historial de la orden."""
@@ -493,6 +566,99 @@ class OrderService:
         self.order_repo.update(order)
 
         self.add_event(order, "Pago recibido", f"Pago de ${amount:.2f}", f"Método: {payment_method}")
+        return payment
+
+    def edit_payment(self, payment_id: int, **kwargs) -> Payment:
+        """Editar los campos de un pago existente.
+
+        Campos editables: ``payment_type``, ``payment_method``, ``amount``,
+        ``reference``, ``notes``, ``payment_date``.
+
+        Si se cambia el monto, se recalcula el saldo de la orden.
+
+        Raises:
+            ValueError: Si el pago no existe, está anulado, o el nuevo monto
+                es inválido.
+        """
+        payment_repo = PaymentRepo(self.session)
+        payment = payment_repo.get_by_id(payment_id)
+        if payment is None:
+            raise ValueError(f"No se encontró el pago con id={payment_id}")
+        if payment.is_voided:
+            raise ValueError("No se puede editar un pago anulado")
+
+        old_amount = payment.amount
+        allowed_fields = {"payment_type", "payment_method", "amount", "reference", "notes", "payment_date"}
+        changes: list[str] = []
+
+        for key, value in kwargs.items():
+            if key not in allowed_fields:
+                continue
+            if key == "amount":
+                if value <= 0:
+                    raise ValueError("El monto del pago debe ser mayor que cero")
+            if key in ("reference", "notes"):
+                value = value.strip() or None
+            old_val = getattr(payment, key)
+            if old_val != value:
+                setattr(payment, key, value)
+                changes.append(f"{key}: {old_val!r} → {value!r}")
+
+        if not changes:
+            return payment
+
+        payment_repo.update(payment)
+
+        # Recalcular saldo si cambió el monto
+        if "amount" in kwargs and kwargs["amount"] != old_amount:
+            order = self.order_repo.get_by_id(payment.order_id)
+            if order:
+                total_paid = payment_repo.get_total_paid(order.id)
+                order.balance = order.total - total_paid
+                self.order_repo.update(order)
+
+        self.add_event(
+            self.order_repo.get_by_id(payment.order_id),
+            "Pago editado",
+            f"Pago #{payment_id} editado",
+            "; ".join(changes),
+        )
+        logger.info("Pago %s editado: %s", payment_id, "; ".join(changes))
+        return payment
+
+    def void_payment(self, payment_id: int, reason: str) -> Payment:
+        """Anular un pago y recalcular el saldo de la orden.
+
+        Raises:
+            ValueError: Si el pago no existe o ya está anulado.
+        """
+        if not reason or not reason.strip():
+            raise ValueError("Debe indicar una razón para anular el pago")
+
+        payment_repo = PaymentRepo(self.session)
+        payment = payment_repo.get_by_id(payment_id)
+        if payment is None:
+            raise ValueError(f"No se encontró el pago con id={payment_id}")
+        if payment.is_voided:
+            raise ValueError("El pago ya está anulado")
+
+        payment_repo.void(payment, reason)
+
+        # Recalcular saldo de la orden
+        order = self.order_repo.get_by_id(payment.order_id)
+        if order:
+            total_paid = payment_repo.get_total_paid(order.id)
+            order.balance = order.total - total_paid
+            self.order_repo.update(order)
+
+            self.add_event(
+                order,
+                "Pago anulado",
+                f"Pago #{payment_id} de ${payment.amount:.2f} anulado",
+                f"Razón: {reason.strip()}",
+            )
+
+        logger.info("Pago %s anulado. Razón: %s", payment_id, reason)
         return payment
 
     def _record_status_change(self, order: ServiceOrder, old_status: str, new_status: str, comment: str) -> None:

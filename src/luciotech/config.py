@@ -177,3 +177,48 @@ def get_log_dir() -> Path:
 def get_db_path() -> Path:
     """Obtener la ruta de la base de datos."""
     return get_data_dir() / "database.sqlite3"
+
+
+def get_reports_dir() -> Path:
+    """Obtener el directorio de reportes. Lee de settings si existe."""
+    from luciotech.database.connection import get_session
+    from luciotech.database.models import Settings
+
+    try:
+        session = get_session()
+        setting = session.query(Settings).filter(Settings.key == "reports_dir").first()
+        if setting and setting.value:
+            return Path(setting.value)
+    except Exception:
+        pass
+    return get_data_dir() / "reports"
+
+
+def get_backups_dir() -> Path:
+    """Obtener el directorio de backups. Lee de settings si existe."""
+    from luciotech.database.connection import get_session
+    from luciotech.database.models import Settings
+
+    try:
+        session = get_session()
+        setting = session.query(Settings).filter(Settings.key == "backups_dir").first()
+        if setting and setting.value:
+            return Path(setting.value)
+    except Exception:
+        pass
+    return get_data_dir() / "backups"
+
+
+def get_attachments_dir() -> Path:
+    """Obtener el directorio de adjuntos. Lee de settings si existe."""
+    from luciotech.database.connection import get_session
+    from luciotech.database.models import Settings
+
+    try:
+        session = get_session()
+        setting = session.query(Settings).filter(Settings.key == "attachments_dir").first()
+        if setting and setting.value:
+            return Path(setting.value)
+    except Exception:
+        pass
+    return get_data_dir() / "attachments"

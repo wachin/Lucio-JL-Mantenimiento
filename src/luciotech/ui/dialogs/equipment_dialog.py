@@ -196,7 +196,7 @@ class EquipmentEditDialog(QDialog):
 
     def _save(self) -> None:
         try:
-            self._service.update_equipment(
+            _equipment, warnings = self._service.update_equipment(
                 self._equipment,
                 equipment_type=self._type.currentText(),
                 brand=self._brand.text(),
@@ -213,4 +213,6 @@ class EquipmentEditDialog(QDialog):
         except ValueError as error:
             QMessageBox.warning(self, "No se pudo guardar", str(error))
             return
+        if warnings:
+            QMessageBox.warning(self, "Advertencia", "\n".join(warnings))
         self.accept()

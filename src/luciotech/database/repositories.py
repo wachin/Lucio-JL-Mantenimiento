@@ -8,7 +8,7 @@ from typing import Sequence
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from luciotech.database.models import Customer, Equipment, ServiceOrder, Photo, StatusHistory, HistoryEvent, Payment, BudgetConcept
+from luciotech.database.models import Customer, Equipment, ServiceOrder, Photo, StatusHistory, HistoryEvent, Payment, BudgetConcept, FieldChange
 
 
 class CustomerRepo:
@@ -537,6 +537,9 @@ class PaymentRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def get_by_id(self, payment_id: int) -> Payment | None:
+        return self.session.get(Payment, payment_id)
+
     def get_by_order(self, order_id: int) -> Sequence[Payment]:
         stmt = select(Payment).where(Payment.order_id == order_id).order_by(Payment.payment_date.desc())
         return self.session.scalars(stmt).all()
@@ -547,10 +550,33 @@ class PaymentRepo:
         self.session.refresh(payment)
         return payment
 
+    def update(self, payment: Payment) -> Payment:
+        """Actualizar los campos de un pago existente."""
+        payment = self.session.merge(payment)
+        self.session.commit()
+        self.session.refresh(payment)
+        return payment
+
+    def void(self, payment: Payment, reason: str) -> Payment:
+        """Marcar un pago como anulado con la razón indicada."""
+        payment = self.session.merge(payment)
+        payment.is_voided = True
+        payment.void_reason = reason.strip() or None
+        self.session.commit()
+        self.session.refresh(payment)
+        return payment
+
     def get_total_paid(self, order_id: int) -> float:
+        """Sumar los montos de pagos no anulados para una orden."""
         from sqlalchemy import func
 
-        stmt = select(func.coalesce(func.sum(Payment.amount), 0.0)).where(Payment.order_id == order_id)
+        stmt = (
+            select(func.coalesce(func.sum(Payment.amount), 0.0))
+            .where(
+                Payment.order_id == order_id,
+                Payment.is_voided == False,  # noqa: E712
+            )
+        )
         return self.session.scalar(stmt) or 0.0
 
 
@@ -593,3 +619,24 @@ class BudgetConceptRepo:
         for c in saved:
             self.session.refresh(c)
         return saved
+
+class FieldChangeRepo:
+    """Repositorio para auditoría de cambios de campos."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(self, record: FieldChange) -> FieldChange:
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
+    def get_by_order(self, order_id: int) -> Sequence[FieldChange]:
+        stmt = (
+            select(FieldChange)
+            .where(FieldChange.order_id == order_id)
+            .order_by(FieldChange.changed_at.desc())
+        )
+        return self.session.scalars(stmt).all()
+

@@ -360,6 +360,15 @@ class MainWindow(QMainWindow):
         toolbar.setIconSize(QSize(24, 24))
         self.addToolBar(toolbar)
 
+        # Acción toggle sidebar
+        toggle_sidebar_action = QAction("☰", self)
+        toggle_sidebar_action.setToolTip("Mostrar/ocultar barra lateral (Ctrl+B)")
+        toggle_sidebar_action.setShortcut("Ctrl+B")
+        toggle_sidebar_action.triggered.connect(self._toggle_sidebar)
+        toolbar.addAction(toggle_sidebar_action)
+
+        toolbar.addSeparator()
+
         # Acción nueva recepción
         new_action = QAction("Nueva recepción", self)
         new_action.setToolTip("Crear nueva recepción (Ctrl+N)")
@@ -466,3 +475,15 @@ class MainWindow(QMainWindow):
             self, "Imprimir",
             "No hay nada para imprimir en esta vista.",
         )
+
+    def _toggle_sidebar(self) -> None:
+        """Alternar entre barra lateral colapsada y expandida."""
+        if self._sidebar:
+            if self._sidebar._collapsed:
+                self._sidebar.expand()
+                if self._splitter:
+                    self._splitter.setSizes([220, 980])
+            else:
+                self._sidebar.collapse()
+                if self._splitter:
+                    self._splitter.setSizes([60, 1140])

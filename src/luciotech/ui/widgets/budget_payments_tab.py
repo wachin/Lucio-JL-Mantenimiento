@@ -28,8 +28,19 @@ from luciotech.database.models import ServiceOrder, Payment, BudgetConcept
 from luciotech.database.repositories import BudgetConceptRepo
 from luciotech.services.order_service import OrderService
 from luciotech.config import PAYMENT_TYPES, PAYMENT_METHODS, CONCEPT_TYPES
+from luciotech.utils import format_money, currency_prefix
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_money(text: str) -> float:
+    """Extraer el valor numérico de una cadena formateada como dinero."""
+    cleaned = re.sub(r'[^\d.\-]', '', text)
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
 
 
 class BudgetPaymentsTab(QWidget):
@@ -44,6 +55,7 @@ class BudgetPaymentsTab(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
+        prefix = currency_prefix()
 
         # Sección: Conceptos de presupuesto
         budget_group = QGroupBox("Presupuesto")
@@ -75,16 +87,41 @@ class BudgetPaymentsTab(QWidget):
 
         layout.addWidget(budget_group)
 
+        # Sección: Estado del presupuesto
+        status_group = QGroupBox("Estado del presupuesto")
+        status_layout = QHBoxLayout(status_group)
+
+        self._lbl_budget_status_label = QLabel("Estado actual:")
+        status_layout.addWidget(self._lbl_budget_status_label)
+
+        self._lbl_budget_status = QLabel("Pendiente")
+        self._lbl_budget_status.setStyleSheet("font-size: 14px; font-weight: bold; padding: 4px 8px; border-radius: 4px;")
+        status_layout.addWidget(self._lbl_budget_status)
+
+        status_layout.addStretch()
+
+        self._btn_approve_budget = QPushButton("✅ Aprobar presupuesto")
+        self._btn_approve_budget.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold; padding: 6px 12px;")
+        self._btn_approve_budget.clicked.connect(self._approve_budget)
+        status_layout.addWidget(self._btn_approve_budget)
+
+        self._btn_reject_budget = QPushButton("❌ Rechazar presupuesto")
+        self._btn_reject_budget.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px 12px;")
+        self._btn_reject_budget.clicked.connect(self._reject_budget)
+        status_layout.addWidget(self._btn_reject_budget)
+
+        layout.addWidget(status_group)
+
         # Resumen de costos
         summary_group = QGroupBox("Resumen de costos")
         summary_layout = QFormLayout(summary_group)
 
-        self._lbl_subtotal = QLabel("$0.00")
+        self._lbl_subtotal = QLabel(format_money(0))
         summary_layout.addRow("Subtotal:", self._lbl_subtotal)
 
         self._spn_discount = QDoubleSpinBox()
         self._spn_discount.setRange(0, 999999)
-        self._spn_discount.setPrefix("$ ")
+        self._spn_discount.setPrefix(prefix)
         self._spn_discount.setDecimals(2)
         self._spn_discount.setValue(0.0)
         self._spn_discount.valueChanged.connect(self._recalculate)
@@ -92,7 +129,7 @@ class BudgetPaymentsTab(QWidget):
 
         self._spn_tax = QDoubleSpinBox()
         self._spn_tax.setRange(0, 999999)
-        self._spn_tax.setPrefix("$ ")
+        self._spn_tax.setPrefix(prefix)
         self._spn_tax.setDecimals(2)
         self._spn_tax.setValue(0.0)
         self._spn_tax.valueChanged.connect(self._recalculate)
@@ -100,17 +137,17 @@ class BudgetPaymentsTab(QWidget):
 
         summary_layout.addRow(HRLine())
 
-        self._lbl_total = QLabel("$0.00")
+        self._lbl_total = QLabel(format_money(0))
         self._lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: #1a1a2e;")
         summary_layout.addRow("TOTAL:", self._lbl_total)
 
-        self._lbl_advance = QLabel("$0.00")
+        self._lbl_advance = QLabel(format_money(0))
         summary_layout.addRow("Anticipo:", self._lbl_advance)
 
-        self._lbl_paid = QLabel("$0.00")
+        self._lbl_paid = QLabel(format_money(0))
         summary_layout.addRow("Pagado:", self._lbl_paid)
 
-        self._lbl_balance = QLabel("$0.00")
+        self._lbl_balance = QLabel(format_money(0))
         self._lbl_balance.setStyleSheet("font-size: 16px; font-weight: bold; color: red;")
         summary_layout.addRow("SALDO PENDIENTE:", self._lbl_balance)
 
@@ -188,11 +225,7 @@ class BudgetPaymentsTab(QWidget):
                 for row in range(self._concepts_table.rowCount()):
                     sub_widget = self._concepts_table.cellWidget(row, 4)
                     if sub_widget and isinstance(sub_widget, QLabel):
-                        text = sub_widget.text().replace("$", "").replace(",", "")
-                        try:
-                            subtotal += float(text)
-                        except ValueError:
-                            pass
+                        subtotal += _parse_money(sub_widget.text())
                 self._spn_tax.setValue(round(subtotal * tax_rate / 100, 2))
         elif self._order.tax:
             self._spn_tax.setValue(self._order.tax)
@@ -205,15 +238,79 @@ class BudgetPaymentsTab(QWidget):
             self._payments_table.setItem(row, 0, QTableWidgetItem(p.payment_date.strftime("%Y-%m-%d") if p.payment_date else ""))
             self._payments_table.setItem(row, 1, QTableWidgetItem(p.payment_type))
             self._payments_table.setItem(row, 2, QTableWidgetItem(p.payment_method))
-            self._payments_table.setItem(row, 3, QTableWidgetItem(f"${p.amount:,.2f}"))
+            self._payments_table.setItem(row, 3, QTableWidgetItem(format_money(p.amount)))
             self._payments_table.setItem(row, 4, QTableWidgetItem(p.reference or ""))
             total_paid += p.amount
 
         # Update summary
         self._recalculate()
-        self._lbl_advance.setText(f"${self._order.advance_payment:,.2f}")
-        self._lbl_paid.setText(f"${total_paid:,.2f}")
-        self._lbl_balance.setText(f"${self._order.balance:,.2f}")
+        self._lbl_advance.setText(format_money(self._order.advance_payment))
+        self._lbl_paid.setText(format_money(total_paid))
+        self._lbl_balance.setText(format_money(self._order.balance))
+
+        # Update budget status indicator
+        self._update_budget_status_display()
+
+    def _update_budget_status_display(self) -> None:
+        """Actualizar la etiqueta de estado del presupuesto con colores."""
+        status = getattr(self._order, "budget_status", None) or "Pendiente"
+        self._lbl_budget_status.setText(status)
+
+        color_map = {
+            "Pendiente": ("background-color: #f39c12; color: white;", True, True),
+            "Aprobado": ("background-color: #2ecc71; color: white;", False, False),
+            "Rechazado": ("background-color: #e74c3c; color: white;", False, False),
+        }
+        style, can_approve, can_reject = color_map.get(status, ("background-color: #95a5a6; color: white;", True, True))
+        self._lbl_budget_status.setStyleSheet(
+            f"font-size: 14px; font-weight: bold; padding: 4px 8px; border-radius: 4px; {style}"
+        )
+        self._btn_approve_budget.setEnabled(can_approve)
+        self._btn_reject_budget.setEnabled(can_reject)
+
+    def _set_budget_status(self, new_status: str) -> None:
+        """Cambiar el estado del presupuesto y crear evento de historial."""
+        from luciotech.database.connection import get_session
+
+        old_status = getattr(self._order, "budget_status", None) or "Pendiente"
+        self._order.budget_status = new_status
+
+        session = get_session()
+        self._order_service.order_repo.update(self._order)
+
+        event_type = "Presupuesto aprobado" if new_status == "Aprobado" else "Presupuesto rechazado"
+        title = f"Presupuesto {new_status.lower()}"
+        description = f"Estado del presupuesto cambiado de '{old_status}' a '{new_status}'."
+        self._order_service.add_event(self._order, event_type, title, description)
+
+        self._update_budget_status_display()
+        logger.info("Presupuesto de orden %s: %s → %s", self._order.order_number, old_status, new_status)
+
+    def _approve_budget(self) -> None:
+        """Aprobar el presupuesto de la orden."""
+        reply = QMessageBox.question(
+            self,
+            "Aprobar presupuesto",
+            "¿Está seguro de que desea aprobar el presupuesto de esta orden?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._set_budget_status("Aprobado")
+            QMessageBox.information(self, "Presupuesto aprobado", "El presupuesto ha sido aprobado.")
+
+    def _reject_budget(self) -> None:
+        """Rechazar el presupuesto de la orden."""
+        reply = QMessageBox.question(
+            self,
+            "Rechazar presupuesto",
+            "¿Está seguro de que desea rechazar el presupuesto de esta orden?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._set_budget_status("Rechazado")
+            QMessageBox.information(self, "Presupuesto rechazado", "El presupuesto ha sido rechazado.")
 
     def _add_concept_row(
         self,
@@ -224,6 +321,7 @@ class BudgetPaymentsTab(QWidget):
     ) -> None:
         row = self._concepts_table.rowCount()
         self._concepts_table.insertRow(row)
+        prefix = currency_prefix()
 
         type_combo = QComboBox()
         type_combo.addItems(CONCEPT_TYPES)
@@ -241,16 +339,16 @@ class BudgetPaymentsTab(QWidget):
 
         price_spin = QDoubleSpinBox()
         price_spin.setRange(0, 999999)
-        price_spin.setPrefix("$ ")
+        price_spin.setPrefix(prefix)
         price_spin.setValue(unit_price)
         self._concepts_table.setCellWidget(row, 3, price_spin)
 
-        subtotal_label = QLabel("$0.00")
+        subtotal_label = QLabel(format_money(0))
         self._concepts_table.setCellWidget(row, 4, subtotal_label)
 
         def calc():
             sub = qty_spin.value() * price_spin.value()
-            subtotal_label.setText(f"${sub:,.2f}")
+            subtotal_label.setText(format_money(sub))
         qty_spin.valueChanged.connect(calc)
         price_spin.valueChanged.connect(calc)
         calc()
@@ -266,18 +364,14 @@ class BudgetPaymentsTab(QWidget):
         for row in range(self._concepts_table.rowCount()):
             sub_widget = self._concepts_table.cellWidget(row, 4)
             if sub_widget and isinstance(sub_widget, QLabel):
-                text = sub_widget.text().replace("$", "").replace(",", "")
-                try:
-                    subtotal += float(text)
-                except ValueError:
-                    pass
+                subtotal += _parse_money(sub_widget.text())
 
         discount = self._spn_discount.value()
         tax = self._spn_tax.value()
         total = subtotal - discount + tax
 
-        self._lbl_subtotal.setText(f"${subtotal:,.2f}")
-        self._lbl_total.setText(f"${total:,.2f}")
+        self._lbl_subtotal.setText(format_money(subtotal))
+        self._lbl_total.setText(format_money(total))
 
     def _register_payment(self) -> None:
         """Diálogo para registrar un pago."""
@@ -299,7 +393,7 @@ class BudgetPaymentsTab(QWidget):
 
         amount_spin = QDoubleSpinBox()
         amount_spin.setRange(0.01, 999999)
-        amount_spin.setPrefix("$ ")
+        amount_spin.setPrefix(currency_prefix())
         amount_spin.setValue(self._order.balance if self._order.balance > 0 else 0)
         layout.addRow("Monto:", amount_spin)
 
@@ -325,7 +419,7 @@ class BudgetPaymentsTab(QWidget):
                     ref_input.text(),
                     notes_input.text(),
                 )
-                QMessageBox.information(dialog, "Pago registrado", f"Pago de ${amount_spin.value():,.2f} registrado.")
+                QMessageBox.information(dialog, "Pago registrado", f"Pago de {format_money(amount_spin.value())} registrado.")
                 self._load_data()
                 dialog.accept()
             except Exception as e:
@@ -388,11 +482,11 @@ class BudgetPaymentsTab(QWidget):
         self._order_service.order_repo.update(self._order)
 
         self._recalculate()
-        self._lbl_paid.setText(f"${total_paid:,.2f}")
-        self._lbl_balance.setText(f"${self._order.balance:,.2f}")
+        self._lbl_paid.setText(format_money(total_paid))
+        self._lbl_balance.setText(format_money(self._order.balance))
 
-        QMessageBox.information(self, "Guardado", f"Presupuesto guardado. Total: ${self._order.total:,.2f}")
-        logger.info("Presupuesto guardado para orden %s: $%.2f (%d conceptos)",
+        QMessageBox.information(self, "Guardado", f"Presupuesto guardado. Total: {format_money(self._order.total)}")
+        logger.info("Presupuesto guardado para orden %s: %.2f (%d conceptos)",
                      self._order.order_number, self._order.total, len(concepts))
 
 

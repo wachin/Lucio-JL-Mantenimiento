@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QPixmap, QMovie
+from PyQt6.QtGui import QPixmap, QMovie, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -28,6 +29,57 @@ from luciotech.services.image_service import PhotoService
 from luciotech.config import PHOTO_TYPES
 
 logger = logging.getLogger(__name__)
+
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+class PhotoListWidget(QListWidget):
+    """QListWidget subclass that accepts image files via drag and drop."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def _has_local_image_urls(self, mime) -> bool:
+        """Return True if *mime* carries at least one local image file URL."""
+        if not mime.hasUrls():
+            return False
+        return any(
+            url.isLocalFile()
+            and Path(url.toLocalFile()).suffix.lower() in _IMAGE_EXTENSIONS
+            for url in mime.urls()
+        )
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self._has_local_image_urls(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if self._has_local_image_urls(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            super().dropEvent(event)
+            return
+
+        paths = [
+            url.toLocalFile()
+            for url in mime.urls()
+            if url.isLocalFile()
+            and Path(url.toLocalFile()).suffix.lower() in _IMAGE_EXTENSIONS
+        ]
+
+        if paths and isinstance(self.window(), PhotoTab):
+            self.window()._import_photos(paths)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
 
 
 class PhotoTab(QWidget):
@@ -81,7 +133,7 @@ class PhotoTab(QWidget):
         list_group = QGroupBox("Fotografías")
         list_layout = QVBoxLayout(list_group)
 
-        self._list = QListWidget()
+        self._list = PhotoListWidget()
         self._list.setIconSize(QSize(100, 100))
         self._list.setViewMode(QListWidget.ViewMode.IconMode)
         self._list.setResizeMode(QListWidget.ResizeMode.Adjust)
@@ -89,6 +141,8 @@ class PhotoTab(QWidget):
         self._list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.itemDoubleClicked.connect(self._open_full_size)
+        self._list.setAcceptDrops(True)
+        self._list.setDragDropMode(QListWidget.DragDropMode.DropOnly)
         list_layout.addWidget(self._list)
 
         splitter.addWidget(list_group)
@@ -156,9 +210,11 @@ class PhotoTab(QWidget):
             self, "Seleccionar carpeta con fotografías"
         )
         if folder:
-            from pathlib import Path
             p = Path(folder)
-            paths = [str(f) for f in p.iterdir() if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}]
+            paths = [
+                str(f) for f in p.iterdir()
+                if f.suffix.lower() in _IMAGE_EXTENSIONS
+            ]
             if paths:
                 self._import_photos(paths)
 
@@ -171,12 +227,52 @@ class PhotoTab(QWidget):
         if not ok:
             return
 
-        photos = self._photo_service.add_photos(self._order_id, self._order_number, paths, photo_type)
+        result = self._photo_service.add_photos(
+            self._order_id, self._order_number, paths, photo_type,
+        )
+        photos = result["photos"]
+        rejected = result["rejected"]
+
         if photos:
             self._load_photos()
-            QMessageBox.information(self, "Importadas", f"{len(photos)} fotografía(s) añadidas.")
+
+        # --- summary dialog ---
+        if photos and not rejected:
+            QMessageBox.information(
+                self, "Importación completada",
+                f"{len(photos)} fotografía(s) importada(s) correctamente.",
+            )
+        elif rejected and not photos:
+            detail = "\n".join(
+                f"• {r['file']}: {r['reason']}" for r in rejected
+            )
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Ningún archivo importado")
+            msg.setText(
+                f"Ninguna de las {len(rejected)} fotografía(s) pudo ser "
+                f"importada."
+            )
+            msg.setDetailedText(detail)
+            msg.exec()
+        elif photos and rejected:
+            detail = "\n".join(
+                f"• {r['file']}: {r['reason']}" for r in rejected
+            )
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Importación parcial")
+            msg.setText(
+                f"{len(photos)} fotografía(s) importada(s).\n"
+                f"{len(rejected)} archivo(s) rechazado(s)."
+            )
+            msg.setDetailedText(detail)
+            msg.exec()
         else:
-            QMessageBox.warning(self, "Error", "No se pudieron importar las fotografías.")
+            QMessageBox.warning(
+                self, "Error",
+                "No se pudieron importar las fotografías.",
+            )
 
     def _delete_selected(self) -> None:
         items = self._list.selectedItems()

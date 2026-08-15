@@ -31,6 +31,9 @@ from PyQt6.QtWidgets import (
 from luciotech.config import (
     get_data_dir,
     get_log_dir,
+    get_reports_dir,
+    get_backups_dir,
+    get_attachments_dir,
     EQUIPMENT_TYPES,
     ORDER_STATUSES,
     PRIORITIES,
@@ -95,6 +98,10 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._create_appearance_tab(), "Apariencia")
         # Catálogos
         tabs.addTab(self._create_catalogs_tab(), "Catálogos")
+        # Plantillas
+        tabs.addTab(self._create_templates_tab(), "Plantillas")
+        # Rutas
+        tabs.addTab(self._create_paths_tab(), "Rutas")
         # Copias de seguridad
         tabs.addTab(self._create_backup_tab(), "Copias de seguridad")
         # Diagnóstico / Logs
@@ -306,6 +313,187 @@ class SettingsDialog(QDialog):
         list_widget.clear()
         list_widget.addItems(defaults)
 
+    def _create_templates_tab(self) -> QWidget:
+        """Crear pestaña de plantillas de texto."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        info = QLabel(
+            "Administre plantillas de texto para insertar en diagnósticos, "
+            "trabajos realizados y recomendaciones. Cada plantilla tiene un nombre "
+            "y contenido HTML."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        # Lista de plantillas
+        self._templates_list = QListWidget()
+        layout.addWidget(self._templates_list)
+
+        # Cargar plantillas existentes
+        self._load_templates()
+
+        # Botones
+        btn_layout = QHBoxLayout()
+
+        add_btn = QPushButton("➕ Añadir plantilla")
+        add_btn.clicked.connect(self._add_template)
+        btn_layout.addWidget(add_btn)
+
+        edit_btn = QPushButton("✏️ Editar")
+        edit_btn.clicked.connect(self._edit_template)
+        btn_layout.addWidget(edit_btn)
+
+        remove_btn = QPushButton("🗑️ Eliminar")
+        remove_btn.clicked.connect(self._remove_template)
+        btn_layout.addWidget(remove_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        return tab
+
+    def _load_templates(self) -> None:
+        """Cargar plantillas desde la configuración."""
+        templates_json = self._get("text_templates", "[]")
+        try:
+            self._templates = json.loads(templates_json)
+        except json.JSONDecodeError:
+            self._templates = []
+
+        self._templates_list.clear()
+        for template in self._templates:
+            self._templates_list.addItem(template.get("name", "Sin nombre"))
+
+    def _add_template(self) -> None:
+        """Añadir una nueva plantilla."""
+        name, accepted = QInputDialog.getText(
+            self, "Nueva plantilla", "Nombre de la plantilla:"
+        )
+        if not accepted or not name.strip():
+            return
+
+        name = name.strip()
+
+        # Verificar duplicados
+        existing_names = {t["name"].casefold() for t in self._templates}
+        if name.casefold() in existing_names:
+            QMessageBox.warning(
+                self, "Duplicado", "Ya existe una plantilla con ese nombre."
+            )
+            return
+
+        # Diálogo para contenido HTML
+        content, accepted = QInputDialog.getMultiLineText(
+            self, "Contenido HTML", f"Contenido HTML para '{name}':"
+        )
+        if not accepted:
+            return
+
+        self._templates.append({"name": name, "content": content})
+        self._templates_list.addItem(name)
+
+    def _edit_template(self) -> None:
+        """Editar la plantilla seleccionada."""
+        row = self._templates_list.currentRow()
+        if row < 0 or row >= len(self._templates):
+            QMessageBox.information(self, "Editar", "Seleccione una plantilla para editar.")
+            return
+
+        template = self._templates[row]
+        name = template["name"]
+
+        # Editar nombre
+        new_name, accepted = QInputDialog.getText(
+            self, "Editar nombre", "Nuevo nombre:", text=name
+        )
+        if not accepted or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+
+        # Editar contenido
+        new_content, accepted = QInputDialog.getMultiLineText(
+            self, "Editar contenido", f"Contenido HTML para '{new_name}':",
+            text=template["content"]
+        )
+        if not accepted:
+            return
+
+        template["name"] = new_name
+        template["content"] = new_content
+        self._templates_list.item(row).setText(new_name)
+
+    def _remove_template(self) -> None:
+        """Eliminar la plantilla seleccionada."""
+        row = self._templates_list.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Eliminar", "Seleccione una plantilla para eliminar.")
+            return
+
+        name = self._templates[row]["name"]
+        reply = QMessageBox.question(
+            self, "Confirmar eliminación",
+            f"¿Eliminar la plantilla '{name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self._templates.pop(row)
+            self._templates_list.takeItem(row)
+
+    def _create_paths_tab(self) -> QWidget:
+        """Crear pestaña de configuración de rutas."""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Reports directory
+        reports_layout = QHBoxLayout()
+        self._reports_dir = QLineEdit(self._get("reports_dir", str(get_reports_dir())))
+        self._reports_dir.setReadOnly(True)
+        reports_layout.addWidget(self._reports_dir)
+        btn_reports = QPushButton("Examinar")
+        btn_reports.clicked.connect(lambda: self._browse_dir(self._reports_dir, "reports_dir"))
+        reports_layout.addWidget(btn_reports)
+        layout.addRow("Directorio de reportes:", reports_layout)
+
+        # Backups directory
+        backups_layout = QHBoxLayout()
+        self._backups_dir = QLineEdit(self._get("backups_dir", str(get_backups_dir())))
+        self._backups_dir.setReadOnly(True)
+        backups_layout.addWidget(self._backups_dir)
+        btn_backups = QPushButton("Examinar")
+        btn_backups.clicked.connect(lambda: self._browse_dir(self._backups_dir, "backups_dir"))
+        backups_layout.addWidget(btn_backups)
+        layout.addRow("Directorio de backups:", backups_layout)
+
+        # Attachments directory
+        attachments_layout = QHBoxLayout()
+        self._attachments_dir = QLineEdit(self._get("attachments_dir", str(get_attachments_dir())))
+        self._attachments_dir.setReadOnly(True)
+        attachments_layout.addWidget(self._attachments_dir)
+        btn_attachments = QPushButton("Examinar")
+        btn_attachments.clicked.connect(lambda: self._browse_dir(self._attachments_dir, "attachments_dir"))
+        attachments_layout.addWidget(btn_attachments)
+        layout.addRow("Directorio de adjuntos:", attachments_layout)
+
+        # Info label
+        info = QLabel("Los directorios se crearán automáticamente si no existen.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: gray; font-size: 10px;")
+        layout.addRow("", info)
+
+        return tab
+
+    def _browse_dir(self, line_edit: QLineEdit, settings_key: str) -> None:
+        """Abrir diálogo para seleccionar directorio."""
+        current_path = line_edit.text()
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Seleccionar directorio", current_path
+        )
+        if dir_path:
+            line_edit.setText(dir_path)
+
     def _create_backup_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -498,9 +686,16 @@ class SettingsDialog(QDialog):
         self._set_setting("tax_rate", str(self._tax_rate.value()))
         self._set_setting("theme", self._theme_combo.currentText())
         self._set_setting("font_size", str(self._font_size_spin.value()))
+        # Persist path settings
+        self._set_setting("reports_dir", self._reports_dir.text())
+        self._set_setting("backups_dir", self._backups_dir.text())
+        self._set_setting("attachments_dir", self._attachments_dir.text())
         # Persist all catalogs as JSON
         for key, items in catalog_data.items():
             self._set_setting(key, json.dumps(items, ensure_ascii=False))
+        # Persist templates as JSON
+        if hasattr(self, "_templates"):
+            self._set_setting("text_templates", json.dumps(self._templates, ensure_ascii=False))
 
         QMessageBox.information(self, "Guardado", "Configuración guardada exitosamente.")
         logger.info("Configuración guardada")

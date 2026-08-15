@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -12,7 +13,9 @@ from PyQt6.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
+    QGuiApplication,
     QIcon,
+    QImage,
     QTextCharFormat,
     QTextCursor,
     QTextListFormat,
@@ -38,6 +41,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 
 from luciotech.config import get_data_dir
+
+logger = logging.getLogger(__name__)
 
 
 class RichTextToolbar(QToolBar):
@@ -117,6 +122,7 @@ class RichTextToolbar(QToolBar):
         self._add_action("Tabla", "Insertar tabla", self._insert_table)
         self._add_action("Imagen", "Insertar imagen", self._insert_image)
         self._add_action("—", "Línea horizontal", self._insert_hr)
+        self._add_action("📝 Insertar plantilla", "Insertar plantilla de texto", self._insert_template)
 
         self.addSeparator()
 
@@ -316,6 +322,55 @@ class RichTextToolbar(QToolBar):
     def _insert_hr(self) -> None:
         cursor = self._editor.textCursor()
         cursor.insertHtml("<hr>")
+
+    def _insert_template(self) -> None:
+        """Insertar plantilla de texto en la posición del cursor."""
+        import json
+        from PyQt6.QtWidgets import QInputDialog
+        from luciotech.database.connection import get_session
+        from luciotech.database.models import Settings
+
+        # Cargar plantillas desde la configuración
+        session = get_session()
+        setting = session.query(Settings).filter(Settings.key == "text_templates").first()
+        
+        if not setting or not setting.value:
+            QMessageBox.information(
+                self, "Plantillas",
+                "No hay plantillas configuradas. Ve a Configuración → Plantillas para añadir."
+            )
+            return
+
+        try:
+            templates = json.loads(setting.value)
+        except json.JSONDecodeError:
+            templates = []
+
+        if not templates:
+            QMessageBox.information(
+                self, "Plantillas",
+                "No hay plantillas configuradas. Ve a Configuración → Plantillas para añadir."
+            )
+            return
+
+        # Mostrar diálogo para seleccionar plantilla
+        template_names = [t.get("name", "Sin nombre") for t in templates]
+        name, accepted = QInputDialog.getItem(
+            self, "Insertar plantilla", "Seleccione una plantilla:",
+            template_names, 0, False
+        )
+
+        if not accepted or not name:
+            return
+
+        # Encontrar la plantilla seleccionada
+        template = next((t for t in templates if t.get("name") == name), None)
+        if not template:
+            return
+
+        # Insertar el contenido HTML en la posición del cursor
+        cursor = self._editor.textCursor()
+        cursor.insertHtml(template.get("content", ""))
 
     def _paste_plain(self) -> None:
         self._editor.setAcceptRichText(False)
@@ -545,3 +600,25 @@ class QTextEditWithIndent(QWidget):
     def zoom_out(self, amount: int = 10) -> None:
         """Request zoom out; each 10 units = 1 step."""
         self.zoom_requested.emit(-max(1, amount // 10))
+
+    def paste(self) -> None:
+        """Paste from clipboard, handling images by saving them to disk."""
+        clipboard = QGuiApplication.clipboard()
+        mime = clipboard.mimeData()
+        if mime.hasImage():
+            image = clipboard.image()
+            if not image.isNull():
+                try:
+                    img_dir = get_data_dir() / "editor_images"
+                    img_dir.mkdir(parents=True, exist_ok=True)
+                    dest = img_dir / f"{uuid.uuid4().hex}.png"
+                    if image.save(str(dest), "PNG"):
+                        cursor = self._inner.textCursor()
+                        cursor.insertHtml(
+                            f'<br><img src="{dest}" width="400"><br>'
+                        )
+                        return
+                except Exception:
+                    logger.exception("Failed to paste clipboard image")
+        # No image or save failed — fall back to default text paste
+        self._inner.paste()

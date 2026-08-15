@@ -79,7 +79,7 @@ def test_create_equipment(setup_test_db):
     equip_svc = EquipmentService()
 
     customer, _ = customer_svc.create_customer("Test", "0999999999")
-    equipment = equip_svc.create_equipment(
+    equipment, _ = equip_svc.create_equipment(
         customer_id=customer.id,
         equipment_type="Laptop",
         brand="Dell",
@@ -101,7 +101,7 @@ def test_create_order(setup_test_db):
     order_svc = OrderService()
 
     customer, _ = customer_svc.create_customer("Ana García", "0977777777")
-    equipment = equip_svc.create_equipment(
+    equipment, _ = equip_svc.create_equipment(
         customer_id=customer.id,
         equipment_type="Laptop",
         brand="HP",
@@ -144,7 +144,7 @@ def test_change_status(setup_test_db):
     order_svc = OrderService()
 
     customer, _ = customer_svc.create_customer("Test", "0999999999")
-    equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
+    equipment, _ = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
     order = order_svc.create_order(customer, equipment, datetime.now())
 
     old_status = order.status
@@ -170,7 +170,7 @@ def test_payment_and_balance(setup_test_db):
     order_svc = OrderService()
 
     customer, _ = customer_svc.create_customer("Test", "0999999999")
-    equipment = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
+    equipment, _ = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
     order = order_svc.create_order(
         customer, equipment, datetime.now(),
         diagnostic_cost=100.0,
