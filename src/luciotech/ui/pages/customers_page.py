@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -19,6 +23,8 @@ from PyQt6.QtWidgets import (
 from luciotech.database.models import Customer
 from luciotech.services.order_service import CustomerService
 from luciotech.ui.dialogs.customer_dialog import CustomerSelectDialog
+
+logger = logging.getLogger(__name__)
 
 
 class CustomersPage(QWidget):
@@ -31,6 +37,7 @@ class CustomersPage(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(250)
         self._search_timer.timeout.connect(self._load_customers)
+        self._showing_deleted = False
         self._init_ui()
         self._load_customers()
 
@@ -64,9 +71,20 @@ class CustomersPage(QWidget):
         self._btn_detail.clicked.connect(self._show_customer_detail)
         actions.addWidget(self._btn_detail)
 
+        self._btn_restore = QPushButton("Restaurar")
+        self._btn_restore.setEnabled(False)
+        self._btn_restore.setToolTip("Restaurar cliente eliminado")
+        self._btn_restore.clicked.connect(self._restore_selected_customer)
+        actions.addWidget(self._btn_restore)
+
         self._btn_refresh = QPushButton("Actualizar")
         self._btn_refresh.clicked.connect(self._load_customers)
         actions.addWidget(self._btn_refresh)
+
+        self._chk_show_deleted = QCheckBox("Mostrar eliminados")
+        self._chk_show_deleted.toggled.connect(self._on_toggle_deleted)
+        actions.addWidget(self._chk_show_deleted)
+
         layout.addLayout(actions)
 
         self._table = QTableWidget()
@@ -102,12 +120,38 @@ class CustomersPage(QWidget):
         self._count_label.setStyleSheet("padding: 6px; color: palette(mid);")
         layout.addWidget(self._count_label)
 
+    def _on_toggle_deleted(self, checked: bool) -> None:
+        """Alternar entre clientes activos y eliminados."""
+        self._showing_deleted = checked
+        if checked:
+            self._btn_new.setEnabled(False)
+            self._btn_edit.setEnabled(False)
+            self._search_input.setPlaceholderText(
+                "Buscar clientes eliminados..."
+            )
+        else:
+            self._btn_new.setEnabled(True)
+            self._search_input.setPlaceholderText(
+                "Buscar por nombre, identificación, teléfono o correo..."
+            )
+        self._load_customers()
+
     def _load_customers(self) -> None:
         # Los diálogos usan su propia sesión; descartar aquí los valores en
         # caché permite mostrar inmediatamente las altas y ediciones.
         self._service.repo.session.expire_all()
         query = self._search_input.text().strip()
-        customers = self._service.search(query) if query else self._service.get_all()
+
+        if self._showing_deleted:
+            customers = (
+                self._service.search_deleted(query) if query
+                else self._service.get_deleted()
+            )
+        else:
+            customers = (
+                self._service.search(query) if query
+                else self._service.get_all()
+            )
 
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(customers))
@@ -121,11 +165,27 @@ class CustomersPage(QWidget):
             self._table.setItem(row, 4, QTableWidgetItem(customer.email or ""))
             self._table.setItem(row, 5, QTableWidgetItem(customer.address or ""))
             self._table.setItem(row, 6, QTableWidgetItem(str(len(customer.equipments))))
-            created = customer.created_at.strftime("%Y-%m-%d") if customer.created_at else ""
-            self._table.setItem(row, 7, QTableWidgetItem(created))
+            if self._showing_deleted and customer.deleted_at:
+                date_str = customer.deleted_at.strftime("%Y-%m-%d")
+            elif customer.created_at:
+                date_str = customer.created_at.strftime("%Y-%m-%d")
+            else:
+                date_str = ""
+            self._table.setItem(row, 7, QTableWidgetItem(date_str))
+
+            # Marcar visualmente las filas eliminadas
+            if self._showing_deleted:
+                for col in range(self._table.columnCount()):
+                    item = self._table.item(row, col)
+                    if item:
+                        item.setForeground(Qt.GlobalColor.gray)
 
         self._table.setSortingEnabled(True)
-        self._count_label.setText(f"{len(customers)} cliente(s)")
+
+        if self._showing_deleted:
+            self._count_label.setText(f"{len(customers)} cliente(s) eliminado(s)")
+        else:
+            self._count_label.setText(f"{len(customers)} cliente(s)")
         self._update_actions()
 
     def _selected_customer(self) -> Customer | None:
@@ -137,8 +197,35 @@ class CustomersPage(QWidget):
 
     def _update_actions(self) -> None:
         has_selection = self._selected_customer() is not None
-        self._btn_edit.setEnabled(has_selection)
-        self._btn_detail.setEnabled(has_selection)
+        if self._showing_deleted:
+            self._btn_edit.setEnabled(False)
+            self._btn_detail.setEnabled(False)
+            self._btn_restore.setEnabled(has_selection)
+        else:
+            self._btn_edit.setEnabled(has_selection)
+            self._btn_detail.setEnabled(has_selection)
+            self._btn_restore.setEnabled(False)
+
+    def _restore_selected_customer(self) -> None:
+        """Restaurar el cliente eliminado seleccionado."""
+        customer = self._selected_customer()
+        if customer is None:
+            return
+        reply = QMessageBox.question(
+            self,
+            "Restaurar cliente",
+            f"¿Restaurar al cliente \"{customer.full_name}\"?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._service.restore_customer(customer)
+            self._load_customers()
+        except Exception as e:
+            logger.exception("Error restaurando cliente %d", customer.id)
+            QMessageBox.critical(self, "Error", f"No se pudo restaurar el cliente: {e}")
 
     def _show_customer_detail(self) -> None:
         customer = self._selected_customer()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from luciotech.config import ORDER_STATUSES
-from luciotech.database.models import ServiceOrder
+from luciotech.database.models import Payment, ServiceOrder
 from luciotech.services.order_service import OrderService
 
 
@@ -66,6 +66,10 @@ class HomePage(QWidget):
         self._ready_value = self._add_card(cards, 1, "Listas para entregar", "0", "#16a34a")
         self._overdue_value = self._add_card(cards, 2, "Órdenes retrasadas", "0", "#dc2626")
         self._balance_value = self._add_card(cards, 3, "Saldo pendiente", "$0.00", "#d97706")
+        self._received_today_value = self._add_card(cards, 4, "Equipos recibidos hoy", "0", "#0891b2")
+        self._delivered_month_value = self._add_card(cards, 5, "Equipos entregados este mes", "0", "#7c3aed")
+        self._month_income_value = self._add_card(cards, 6, "Ingresos del mes", "$0.00", "#059669")
+        self._upcoming_deliveries_value = self._add_card(cards, 7, "Entregas próximas", "0", "#e11d48")
         layout.addLayout(cards)
 
         content = QHBoxLayout()
@@ -164,6 +168,42 @@ class HomePage(QWidget):
         self._ready_value.setText(str(len(ready)))
         self._overdue_value.setText(str(len(overdue)))
         self._balance_value.setText(f"${balance:,.2f}")
+
+        # New indicators
+        today = now.date()
+        received_today = [
+            order for order in orders
+            if order.intake_date and order.intake_date.date() == today
+        ]
+        self._received_today_value.setText(str(len(received_today)))
+
+        month_start = datetime(now.year, now.month, 1)
+        if now.month == 12:
+            month_end = datetime(now.year + 1, 1, 1)
+        else:
+            month_end = datetime(now.year, now.month + 1, 1)
+
+        delivered_this_month = [
+            order for order in orders
+            if order.delivery_date and month_start <= order.delivery_date < month_end
+        ]
+        self._delivered_month_value.setText(str(len(delivered_this_month)))
+
+        month_income = sum(
+            payment.amount
+            for order in orders
+            for payment in order.payments
+            if month_start <= payment.payment_date < month_end
+        )
+        self._month_income_value.setText(f"${month_income:,.2f}")
+
+        upcoming_deadline = now + timedelta(days=7)
+        upcoming_deliveries = [
+            order for order in active
+            if order.estimated_delivery_date and now <= order.estimated_delivery_date <= upcoming_deadline
+        ]
+        self._upcoming_deliveries_value.setText(str(len(upcoming_deliveries)))
+
         self._populate_statuses(orders)
         self._populate_recent(orders[:10])
         self._updated_label.setText(f"Actualizado: {now:%Y-%m-%d %H:%M:%S}")

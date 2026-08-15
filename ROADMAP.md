@@ -1,6 +1,6 @@
 # Roadmap de JL Mantenimiento
 
-Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración P2 (empaquetado, accesibilidad, persistencia visual).
+Estado verificado el **2026-08-15** contra el código del repositorio. Última actualización: iteración final (17 tareas adicionales implementadas en paralelo).
 
 Leyenda:
 
@@ -56,7 +56,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Atajo `Ctrl+F` para buscar órdenes.
 - [x] Barra de estado.
 - [x] Persistencia de la referencia Python de la ventana principal.
-- [ ] Conectar la acción global `Ctrl+P` a una impresión contextual válida.
+- [x] Conectar la acción global `Ctrl+P` a una impresión contextual válida
+  (genera comprobante PDF de la orden seleccionada en Órdenes).
 - [ ] Iconos definitivos y sistema visual consistente.
 - [x] Recordar tamaño, posición, divisores y sección abierta
   (`window_state.json` en el directorio de datos, guardado al cerrar).
@@ -72,10 +73,10 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Diez órdenes recientes con apertura por doble clic.
 - [x] Accesos a nueva recepción y lista de órdenes.
 - [x] Actualización al volver a Inicio.
-- [ ] Equipos recibidos hoy como indicador independiente.
-- [ ] Equipos entregados durante el mes.
-- [ ] Ingresos reales del mes basados en pagos, no en totales presupuestados.
-- [ ] Entregas estimadas próximas.
+- [x] Equipos recibidos hoy como indicador independiente.
+- [x] Equipos entregados durante el mes.
+- [x] Ingresos reales del mes basados en pagos recibidos.
+- [x] Entregas estimadas próximas (próximos 7 días).
 - [ ] Gráficos opcionales.
 
 ## 5. Clientes
@@ -88,12 +89,14 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Evitar identificaciones duplicadas.
 - [x] Mostrar cantidad de equipos asociados.
 - [x] Integración segura entre sesiones SQLAlchemy de páginas y diálogos.
-- [ ] Validar formato de teléfono y correo.
+- [x] Validar formato de teléfono (≥7 dígitos) y correo (regex básico).
 - [ ] Advertir posibles duplicados por teléfono, además de identificación.
 - [x] Ficha completa con equipos, órdenes, pagos, saldos y última visita
   (`CustomerDetailDialog` con pestañas de órdenes, equipos y pagos/saldos).
-- [ ] Mostrar órdenes anteriores dentro de Nueva recepción.
-- [ ] Papelera y restauración de clientes desde la UI.
+- [x] Mostrar órdenes anteriores del cliente dentro de Nueva recepción
+  (últimas 5 órdenes con número, fecha, estado y equipo).
+- [x] Papelera y restauración de clientes desde la UI
+  (toggle "Mostrar eliminados" + botón "Restaurar").
 
 ## 6. Equipos
 
@@ -139,9 +142,10 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Apertura por doble clic y menú contextual.
 - [x] Papelera visible, buscable y restaurable.
 - [x] Asociación correcta de filas después de ordenar la tabla.
-- [ ] Elegir columnas visibles y guardar anchos/orden.
+- [x] Elegir columnas visibles y guardar anchos/orden
+  (menú contextual en encabezados + persistencia en `orders_columns.json`).
 - [ ] Selección múltiple y acciones por lote.
-- [ ] Exportar o imprimir directamente el listado filtrado.
+- [x] Exportar directamente el listado filtrado (CSV con columnas visibles).
 - [ ] Eliminación definitiva controlada desde la papelera.
 
 ## 9. Vista y edición de una orden
@@ -152,9 +156,12 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Corrección de la creación diferida del widget de historial.
 - [x] Generación de comprobante e informe técnico.
 - [x] Impresión mediante diálogo del sistema.
-- [ ] Editar todos los datos generales de la orden desde su ficha.
-- [ ] Registrar fecha de finalización y entrega automáticamente según estado.
-- [ ] Mostrar/ocultar contraseña/PIN en la ficha de orden.
+- [x] Editar todos los datos generales de la orden desde su ficha
+  (botón "Editar datos" con estado, prioridad, técnico, fecha estimada, costo).
+- [x] Registrar fecha de finalización y entrega automáticamente según estado
+  (`completion_date` al reparar, `delivery_date` al entregar).
+- [x] Mostrar/ocultar contraseña/PIN en la ficha de orden
+  (botón 👁 junto al campo, oculto por defecto).
 - [ ] Refrescar todas las pestañas sin reconstruir widgets y sesiones repetidamente.
 
 ## 10. Editor enriquecido
@@ -224,7 +231,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Modelo persistente para conceptos del presupuesto (`BudgetConcept` con tipo,
   descripción, cantidad, precio unitario y subtotales). Los conceptos se cargan
   al reabrir la orden y se guardan con el presupuesto.
-- [ ] Controles editables y cálculo real de descuento e impuestos.
+- [x] Controles editables y cálculo real de descuento e impuestos
+  (spinboxes editables, se guardan con el presupuesto).
 - [ ] Aplicar moneda configurada en toda la UI, no solo documentos.
 - [ ] Validar sobrepagos, reembolsos y montos negativos según tipo.
 - [ ] Editar o anular pagos con trazabilidad.
@@ -260,8 +268,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Resumen de totales y saldos.
 - [x] Exportación CSV.
 - [x] Exportación PDF tabular.
-- [ ] Calcular ingresos desde pagos recibidos en el periodo.
-- [ ] Filtros por técnico, prioridad, cliente, tipo y marca.
+- [x] Calcular ingresos desde pagos recibidos en el periodo.
+- [x] Filtros por técnico, prioridad, cliente, tipo y marca.
 - [ ] Reportes de tiempos promedio, garantías y equipos frecuentes.
 - [ ] Gráficos.
 - [ ] Aplicar moneda y encabezado configurados a los reportes exportados.
@@ -285,7 +293,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   y solo entonces reemplaza los datos actuales.
 - [ ] Copias automáticas y retención de las últimas N.
 - [ ] Incluir logo externo, plantillas y otros archivos configurados.
-- [ ] Botón para abrir la carpeta de backups.
+- [x] Botón para abrir la carpeta de backups
+  (`QDesktopServices.openUrl` con creación automática del directorio).
 - [x] Pruebas automatizadas de creación y restauración (Zip Slip, backup consistente, restore atómico).
 
 ## 17. Configuración
@@ -300,7 +309,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Catálogo administrable de tipos de equipo.
 - [x] Aplicación inmediata del catálogo en Nueva recepción.
 - [x] Restablecimiento general de configuración.
-- [ ] Aplicar tasa de impuestos automáticamente al presupuesto.
+- [x] Aplicar tasa de impuestos automáticamente al presupuesto
+  (lee `use_tax` y `tax_rate` de configuración al cargar conceptos).
 - [ ] Catálogos administrables de estados, prioridades, accesorios, eventos,
   métodos y tipos de pago.
 - [ ] Plantillas de texto, condiciones de servicio y notas frecuentes.
@@ -334,7 +344,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Confirmación antes de eliminar órdenes, fotos y restaurar backups.
 - [ ] Cifrado o política explícita para contraseñas almacenadas en SQLite.
 - [x] Validación segura contra Zip Slip al restaurar backups (`_validate_zip_paths`).
-- [ ] Capturador global de excepciones con diálogo y registro.
+- [x] Capturador global de excepciones con diálogo y registro
+  (`sys.excepthook` + `_SafeQApplication.notify` con QMessageBox y log).
 - [ ] Manejo amable cuando el directorio de logs/datos no es escribible.
 - [ ] Validación MIME y límites contra imágenes maliciosas o enormes.
 
@@ -343,10 +354,12 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Archivo rotativo de 5 MB con tres respaldos.
 - [x] Registro de inicio, conexión, ventanas, órdenes, imágenes, PDF y backups.
 - [x] Consola limitada a advertencias y errores.
-- [ ] Registrar cierre normal de la aplicación.
+- [x] Registrar cierre normal de la aplicación
+  (`aboutToQuit` → log "Aplicación cerrada normalmente").
 - [ ] Capturar excepciones no controladas de Python y Qt.
 - [ ] Evitar handlers duplicados si se crea la aplicación más de una vez en pruebas.
-- [ ] Pantalla para abrir/copiar logs desde Configuración.
+- [x] Pantalla para abrir/copiar logs desde Configuración
+  (pestaña "Diagnóstico" con últimas 500 líneas, copiar y abrir archivo).
 
 ## 21. Pruebas y calidad
 

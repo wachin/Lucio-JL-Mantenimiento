@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QComboBox,
     QDateEdit,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -27,10 +28,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QKeySequence
 
-from luciotech.config import ORDER_STATUSES, EQUIPMENT_TYPES
-from luciotech.database.models import ServiceOrder
+from sqlalchemy import func
+
+from luciotech.config import ORDER_STATUSES, EQUIPMENT_TYPES, PRIORITIES
+from luciotech.database.models import ServiceOrder, Payment
 from luciotech.database.connection import get_session
-from luciotech.database.repositories import OrderRepo
+from luciotech.database.repositories import OrderRepo, PaymentRepo
 from luciotech.reports.pdf_service import PDFBuilder, A4
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ class ReportsPage(QWidget):
         super().__init__(parent)
         self._session = get_session()
         self._order_repo = OrderRepo(self._session)
+        self._payment_repo = PaymentRepo(self._session)
         self._current_data: list[list[str]] = []
         self._current_headers: list[str] = []
         self._init_ui()
@@ -73,6 +77,30 @@ class ReportsPage(QWidget):
         self._filter_status.addItem("Todos")
         self._filter_status.addItems(ORDER_STATUSES)
         filter_layout.addWidget(self._filter_status)
+
+        filter_layout.addWidget(QLabel("Técnico:"))
+        self._filter_technician = QComboBox()
+        self._filter_technician.addItem("Todos")
+        self._populate_technicians()
+        filter_layout.addWidget(self._filter_technician)
+
+        filter_layout.addWidget(QLabel("Prioridad:"))
+        self._filter_priority = QComboBox()
+        self._filter_priority.addItem("Todas")
+        self._filter_priority.addItems(PRIORITIES)
+        filter_layout.addWidget(self._filter_priority)
+
+        filter_layout.addWidget(QLabel("Cliente:"))
+        self._filter_customer = QLineEdit()
+        self._filter_customer.setPlaceholderText("Buscar cliente…")
+        self._filter_customer.setMaximumWidth(150)
+        filter_layout.addWidget(self._filter_customer)
+
+        filter_layout.addWidget(QLabel("Tipo equipo:"))
+        self._filter_equipment_type = QComboBox()
+        self._filter_equipment_type.addItem("Todos")
+        self._filter_equipment_type.addItems(EQUIPMENT_TYPES)
+        filter_layout.addWidget(self._filter_equipment_type)
 
         self._btn_run = QPushButton("Generar reporte")
         self._btn_run.clicked.connect(self._generate_report)
@@ -122,6 +150,18 @@ class ReportsPage(QWidget):
 
         layout.addWidget(self._tabs)
 
+    def _populate_technicians(self) -> None:
+        """Llenar el combo de técnicos con valores distintos de las órdenes."""
+        stmt = (
+            self._session.query(ServiceOrder.technician)
+            .filter(ServiceOrder.technician.isnot(None))
+            .filter(ServiceOrder.technician != "")
+            .distinct()
+            .order_by(ServiceOrder.technician)
+        )
+        for (tech,) in stmt.all():
+            self._filter_technician.addItem(tech)
+
     def _generate_report(self) -> None:
         """Generar reporte con filtros."""
         date_from = datetime(
@@ -138,11 +178,27 @@ class ReportsPage(QWidget):
         status = self._filter_status.currentText()
         status_filter = status if status != "Todos" else ""
 
+        priority = self._filter_priority.currentText()
+        priority_filter = priority if priority != "Todas" else ""
+
+        customer_name = self._filter_customer.text().strip()
+
+        equip_type = self._filter_equipment_type.currentText()
+        equip_type_filter = equip_type if equip_type != "Todos" else ""
+
         orders = self._order_repo.search(
             status=status_filter,
+            priority=priority_filter,
+            customer_name=customer_name,
+            equipment_type=equip_type_filter,
             date_from=date_from,
             date_to=date_to,
         )
+
+        # Filtro adicional por técnico (no soportado directamente en OrderRepo.search)
+        technician = self._filter_technician.currentText()
+        if technician != "Todos":
+            orders = [o for o in orders if o.technician == technician]
 
         self._current_headers = [
             "Nº Orden", "Fecha", "Cliente", "Teléfono", "Equipo",
@@ -173,6 +229,14 @@ class ReportsPage(QWidget):
             total_balance += order.balance
             count_by_status[order.status] = count_by_status.get(order.status, 0) + 1
 
+        # Calcular ingresos reales del periodo sumando pagos dentro del rango
+        period_payments_total = (
+            self._session.query(func.coalesce(func.sum(Payment.amount), 0.0))
+            .filter(Payment.payment_date >= date_from)
+            .filter(Payment.payment_date <= date_to)
+            .scalar()
+        ) or 0.0
+
         # Tabla de resultados
         self._table.setColumnCount(len(self._current_headers))
         self._table.setHorizontalHeaderLabels(self._current_headers)
@@ -188,7 +252,8 @@ class ReportsPage(QWidget):
         self._summary_table.setRowCount(0)
         summary_items = [
             ("Total de órdenes", str(len(orders))),
-            ("Ingresos totales", f"${total_income:,.2f}"),
+            ("Ingresos totales (órdenes)", f"${total_income:,.2f}"),
+            (f"Ingresos del periodo (pagos)", f"${period_payments_total:,.2f}"),
             ("Saldo pendiente", f"${total_balance:,.2f}"),
             ("Rango de fechas", f"{date_from.strftime('%Y-%m-%d')} a {date_to.strftime('%Y-%m-%d')}"),
         ]

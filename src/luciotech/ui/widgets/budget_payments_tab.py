@@ -82,11 +82,21 @@ class BudgetPaymentsTab(QWidget):
         self._lbl_subtotal = QLabel("$0.00")
         summary_layout.addRow("Subtotal:", self._lbl_subtotal)
 
-        self._lbl_discount = QLabel("$0.00")
-        summary_layout.addRow("Descuento:", self._lbl_discount)
+        self._spn_discount = QDoubleSpinBox()
+        self._spn_discount.setRange(0, 999999)
+        self._spn_discount.setPrefix("$ ")
+        self._spn_discount.setDecimals(2)
+        self._spn_discount.setValue(0.0)
+        self._spn_discount.valueChanged.connect(self._recalculate)
+        summary_layout.addRow("Descuento:", self._spn_discount)
 
-        self._lbl_tax = QLabel("$0.00")
-        summary_layout.addRow("Impuestos:", self._lbl_tax)
+        self._spn_tax = QDoubleSpinBox()
+        self._spn_tax.setRange(0, 999999)
+        self._spn_tax.setPrefix("$ ")
+        self._spn_tax.setDecimals(2)
+        self._spn_tax.setValue(0.0)
+        self._spn_tax.valueChanged.connect(self._recalculate)
+        summary_layout.addRow("Impuestos:", self._spn_tax)
 
         summary_layout.addRow(HRLine())
 
@@ -143,6 +153,7 @@ class BudgetPaymentsTab(QWidget):
         """Cargar conceptos y pagos."""
         from luciotech.database.repositories import PaymentRepo
         from luciotech.database.connection import get_session
+        from luciotech.services.settings_service import SettingsService
 
         session = get_session()
         pay_repo = PaymentRepo(session)
@@ -160,6 +171,31 @@ class BudgetPaymentsTab(QWidget):
                 quantity=concept.quantity,
                 unit_price=concept.unit_price,
             )
+
+        # Pre-fill discount from order (if already set)
+        if self._order.discount:
+            self._spn_discount.setValue(self._order.discount)
+
+        # Auto-apply tax rate from settings when tax is enabled and no
+        # tax value has been persisted on the order yet.
+        settings = SettingsService()
+        use_tax = settings.get("use_tax", "false") == "true"
+        if use_tax and not self._order.tax:
+            tax_rate = settings.get_int("tax_rate", 0)
+            if tax_rate > 0:
+                # Compute tax over the current subtotal (concepts loaded above)
+                subtotal = 0.0
+                for row in range(self._concepts_table.rowCount()):
+                    sub_widget = self._concepts_table.cellWidget(row, 4)
+                    if sub_widget and isinstance(sub_widget, QLabel):
+                        text = sub_widget.text().replace("$", "").replace(",", "")
+                        try:
+                            subtotal += float(text)
+                        except ValueError:
+                            pass
+                self._spn_tax.setValue(round(subtotal * tax_rate / 100, 2))
+        elif self._order.tax:
+            self._spn_tax.setValue(self._order.tax)
 
         # Load payments
         self._payments_table.setRowCount(0)
@@ -236,13 +272,11 @@ class BudgetPaymentsTab(QWidget):
                 except ValueError:
                     pass
 
-        discount = self._order.discount
-        tax = self._order.tax
+        discount = self._spn_discount.value()
+        tax = self._spn_tax.value()
         total = subtotal - discount + tax
 
         self._lbl_subtotal.setText(f"${subtotal:,.2f}")
-        self._lbl_discount.setText(f"-${discount:,.2f}")
-        self._lbl_tax.setText(f"${tax:,.2f}")
         self._lbl_total.setText(f"${total:,.2f}")
 
     def _register_payment(self) -> None:
@@ -342,10 +376,12 @@ class BudgetPaymentsTab(QWidget):
 
         concept_repo.replace_for_order(self._order.id, concepts)
 
-        discount = self._order.discount
-        tax = self._order.tax
+        discount = self._spn_discount.value()
+        tax = self._spn_tax.value()
         total = subtotal - discount + tax
 
+        self._order.discount = discount
+        self._order.tax = tax
         self._order.total = total
         total_paid = PaymentRepo(session).get_total_paid(self._order.id)
         self._order.balance = total - total_paid

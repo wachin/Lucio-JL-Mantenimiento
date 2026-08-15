@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -18,11 +19,16 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QMessageBox,
     QComboBox,
+    QDoubleSpinBox,
+    QDateEdit,
+    QLineEdit,
+    QDialogButtonBox,
+    QInputDialog,
 )
 
 from luciotech.database.models import ServiceOrder
 from luciotech.services.order_service import OrderService
-from luciotech.config import ORDER_STATUSES
+from luciotech.config import ORDER_STATUSES, PRIORITIES
 from luciotech.ui.widgets.rich_text_edit import RichTextEdit
 from luciotech.ui.widgets.photo_tab import PhotoTab
 from luciotech.ui.widgets.history_timeline import HistoryTimeline
@@ -87,6 +93,10 @@ class OrderViewDialog(QDialog):
         self._btn_change_status = QPushButton("Cambiar estado")
         self._btn_change_status.clicked.connect(self._change_status)
         button_layout.addWidget(self._btn_change_status)
+
+        self._btn_edit_data = QPushButton("✏️ Editar datos")
+        self._btn_edit_data.clicked.connect(self._edit_general_data)
+        button_layout.addWidget(self._btn_edit_data)
 
         self._btn_pdf_receipt = QPushButton("📄 Comprobante PDF")
         self._btn_pdf_receipt.clicked.connect(self._generate_receipt_pdf)
@@ -212,6 +222,20 @@ class OrderViewDialog(QDialog):
         self._equip_physical.setMaximumHeight(60)
         layout.addRow("Estado físico:", self._equip_physical)
 
+        # Password / PIN with toggle
+        password_row = QHBoxLayout()
+        self._lbl_password = QLabel("••••••")
+        self._lbl_password.setProperty("_actual_text", "")
+        password_row.addWidget(self._lbl_password)
+        self._btn_toggle_password = QPushButton("👁")
+        self._btn_toggle_password.setCheckable(True)
+        self._btn_toggle_password.setFixedWidth(36)
+        self._btn_toggle_password.setToolTip("Mostrar / ocultar contraseña")
+        self._btn_toggle_password.toggled.connect(self._toggle_password_visibility)
+        password_row.addWidget(self._btn_toggle_password)
+        password_row.addStretch()
+        layout.addRow("Contraseña/PIN:", password_row)
+
         return tab
 
     def _create_diagnosis_tab(self) -> QWidget:
@@ -298,6 +322,12 @@ class OrderViewDialog(QDialog):
             self._equip_accessories.setText(equipment.accessories or "Sin accesorios")
             self._equip_physical.setPlainText(equipment.physical_state or "")
 
+            # Password / PIN
+            actual = equipment.password or ""
+            self._lbl_password.setProperty("_actual_text", actual)
+            self._btn_toggle_password.setChecked(False)
+            self._lbl_password.setText("••••••" if actual else "Sin contraseña")
+
         # Load diagnosis
         if self._order.diagnosis_html:
             self._editor_diagnosis.set_html(self._order.diagnosis_html)
@@ -350,8 +380,6 @@ class OrderViewDialog(QDialog):
         if not self._order:
             return
 
-        from PyQt6.QtWidgets import QInputDialog
-
         status, ok = QInputDialog.getItem(
             self,
             "Cambiar estado",
@@ -362,8 +390,122 @@ class OrderViewDialog(QDialog):
         )
         if ok and status:
             self._order = self._order_service.change_status(self._order, status)
+            # Auto-set completion / delivery dates based on new status
+            self._auto_set_dates_for_status(status)
             self._load_order()
             logger.info("Estado cambiado a %s para orden %s", status, self._order.order_number)
+
+    def _auto_set_dates_for_status(self, status: str) -> None:
+        """Set completion_date or delivery_date automatically based on status."""
+        if not self._order:
+            return
+        now = datetime.now()
+        changed = False
+        if status in ("Reparado", "Listo para entregar") and not self._order.completion_date:
+            self._order.completion_date = now
+            changed = True
+        if status == "Entregado" and not self._order.delivery_date:
+            self._order.delivery_date = now
+            changed = True
+        if changed:
+            self._order_service.order_repo.update(self._order)
+
+    def _toggle_password_visibility(self, checked: bool) -> None:
+        """Toggle between masked and visible password display."""
+        actual = self._lbl_password.property("_actual_text") or ""
+        if checked:
+            self._lbl_password.setText(actual if actual else "Sin contraseña")
+            self._btn_toggle_password.setText("🔒")
+        else:
+            self._lbl_password.setText("••••••" if actual else "Sin contraseña")
+            self._btn_toggle_password.setText("👁")
+
+    def _edit_general_data(self) -> None:
+        """Open a dialog to edit general order fields."""
+        if not self._order:
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Editar datos de la orden")
+        dialog.setMinimumWidth(400)
+        form = QFormLayout(dialog)
+
+        # Status
+        combo_status = QComboBox()
+        combo_status.addItems(ORDER_STATUSES)
+        if self._order.status in ORDER_STATUSES:
+            combo_status.setCurrentText(self._order.status)
+        form.addRow("Estado:", combo_status)
+
+        # Priority
+        combo_priority = QComboBox()
+        combo_priority.addItems(PRIORITIES)
+        if self._order.priority in PRIORITIES:
+            combo_priority.setCurrentText(self._order.priority)
+        form.addRow("Prioridad:", combo_priority)
+
+        # Technician
+        edit_technician = QLineEdit(self._order.technician or "")
+        edit_technician.setPlaceholderText("Nombre del técnico")
+        form.addRow("Técnico:", edit_technician)
+
+        # Estimated delivery date
+        date_estimated = QDateEdit()
+        date_estimated.setCalendarPopup(True)
+        date_estimated.setDisplayFormat("yyyy-MM-dd")
+        if self._order.estimated_delivery_date:
+            date_estimated.setDate(QDate(
+                self._order.estimated_delivery_date.year,
+                self._order.estimated_delivery_date.month,
+                self._order.estimated_delivery_date.day,
+            ))
+        form.addRow("Fecha estimada:", date_estimated)
+
+        # Diagnostic cost
+        spin_cost = QDoubleSpinBox()
+        spin_cost.setRange(0, 999999.99)
+        spin_cost.setDecimals(2)
+        spin_cost.setPrefix("$")
+        spin_cost.setValue(self._order.diagnostic_cost or 0.0)
+        form.addRow("Costo de diagnóstico:", spin_cost)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        old_status = self._order.status
+        new_status = combo_status.currentText()
+
+        # Apply changes
+        self._order.priority = combo_priority.currentText()
+        self._order.technician = edit_technician.text().strip() or None
+        qdate = date_estimated.date()
+        self._order.estimated_delivery_date = datetime(qdate.year(), qdate.month(), qdate.day())
+        self._order.diagnostic_cost = spin_cost.value()
+
+        # Handle status change (uses change_status for history tracking)
+        if new_status != old_status:
+            self._order = self._order_service.change_status(self._order, new_status)
+            self._auto_set_dates_for_status(new_status)
+        else:
+            self._order_service.order_repo.update(self._order)
+
+        self._order_service.add_event(
+            self._order, "Datos editados", "Datos generales actualizados",
+            f"Estado={new_status}, Prioridad={self._order.priority}, "
+            f"Técnico={self._order.technician or 'N/A'}"
+        )
+
+        QMessageBox.information(self, "Guardado", "Datos de la orden actualizados.")
+        logger.info("Datos generales editados para orden %s", self._order.order_number)
+        self._load_order()
 
     def _generate_receipt_pdf(self) -> None:
         """Generar comprobante de recepción en PDF."""

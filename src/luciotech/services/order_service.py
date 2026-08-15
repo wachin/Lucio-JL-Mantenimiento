@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 from luciotech.database.connection import get_session
@@ -50,6 +51,47 @@ class CustomerService:
             return None
         return self.repo.get_by_phone(phone)
 
+    def get_deleted(self):
+        """Obtener clientes eliminados (soft-deleted)."""
+        return self.repo.get_deleted()
+
+    def search_deleted(self, query: str):
+        """Buscar clientes eliminados por texto."""
+        return self.repo.search_deleted(query)
+
+    def restore_customer(self, customer: Customer) -> Customer:
+        """Restaurar un cliente eliminado."""
+        return self.repo.undelete(customer)
+
+    @staticmethod
+    def _validate_phone(phone: str, field_label: str) -> None:
+        """Validar que el teléfono tenga al menos 7 dígitos."""
+        digits = re.sub(r"\D", "", phone)
+        if len(digits) < 7:
+            raise ValueError(
+                f"{field_label} debe tener al menos 7 dígitos (actualmente {len(digits)})"
+            )
+
+    @staticmethod
+    def _validate_email(email: str) -> None:
+        """Validar formato básico de correo electrónico."""
+        pattern = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+        if not re.match(pattern, email):
+            raise ValueError("El formato del correo electrónico no es válido")
+
+    def _validate_contact_fields(
+        self,
+        phone_primary: str,
+        phone_secondary: str = "",
+        email: str = "",
+    ) -> None:
+        """Validar campos de contacto (teléfono y correo)."""
+        self._validate_phone(phone_primary, "El teléfono principal")
+        if phone_secondary:
+            self._validate_phone(phone_secondary, "El teléfono secundario")
+        if email:
+            self._validate_email(email)
+
     def create_customer(
         self,
         full_name: str,
@@ -67,6 +109,12 @@ class CustomerService:
             raise ValueError("El teléfono principal es obligatorio")
         if id_number.strip() and self.find_by_id_number(id_number.strip()):
             raise ValueError("Ya existe un cliente con esa identificación")
+
+        self._validate_contact_fields(
+            phone_primary=phone_primary.strip(),
+            phone_secondary=phone_secondary.strip(),
+            email=email.strip(),
+        )
 
         customer = Customer(
             full_name=full_name.strip(),
@@ -92,6 +140,15 @@ class CustomerService:
         duplicate = self.find_by_id_number(id_number) if id_number else None
         if duplicate is not None and duplicate.id != customer.id:
             raise ValueError("Ya existe un cliente con esa identificación")
+
+        phone_secondary = str(kwargs.get("phone_secondary", customer.phone_secondary) or "").strip()
+        email = str(kwargs.get("email", customer.email) or "").strip()
+
+        self._validate_contact_fields(
+            phone_primary=phone_primary,
+            phone_secondary=phone_secondary,
+            email=email,
+        )
 
         customer.full_name = full_name
         customer.phone_primary = phone_primary

@@ -77,6 +77,45 @@ class CustomerRepo:
         customer.deleted_at = datetime.now()
         self.session.commit()
 
+    def undelete(self, customer: Customer) -> Customer:
+        """Restaurar un cliente eliminado (soft-undo)."""
+        customer = self.session.merge(customer)
+        customer.is_deleted = False
+        customer.deleted_at = None
+        customer.updated_at = datetime.now()
+        self.session.commit()
+        self.session.refresh(customer)
+        return customer
+
+    def get_deleted(self) -> Sequence[Customer]:
+        """Obtener los clientes que están eliminados (soft-deleted)."""
+        stmt = (
+            select(Customer)
+            .where(Customer.is_deleted == True)  # noqa: E712
+            .order_by(Customer.deleted_at.desc())
+        )
+        return self.session.scalars(stmt).all()
+
+    def search_deleted(self, query: str) -> Sequence[Customer]:
+        """Buscar clientes eliminados por nombre, identificación o teléfono."""
+        pattern = f"%{query}%"
+        stmt = (
+            select(Customer)
+            .where(Customer.is_deleted == True)  # noqa: E712
+            .where(
+                or_(
+                    Customer.full_name.ilike(pattern),
+                    Customer.id_number.ilike(pattern),
+                    Customer.phone_primary.ilike(pattern),
+                    Customer.phone_secondary.ilike(pattern),
+                    Customer.email.ilike(pattern),
+                )
+            )
+            .order_by(Customer.deleted_at.desc())
+            .limit(50)
+        )
+        return self.session.scalars(stmt).all()
+
 
 class EquipmentRepo:
     """Repositorio para operaciones con equipos."""
@@ -292,6 +331,22 @@ class OrderRepo:
                 joinedload(ServiceOrder.equipment),
             )
             .filter(ServiceOrder.is_deleted == False)  # noqa: E712
+            .order_by(ServiceOrder.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def get_by_customer(self, customer_id: int, limit: int = 5) -> Sequence[ServiceOrder]:
+        """Obtener las órdenes recientes de un cliente."""
+        return (
+            self.session.query(ServiceOrder)
+            .options(
+                joinedload(ServiceOrder.equipment),
+            )
+            .filter(
+                ServiceOrder.customer_id == customer_id,
+                ServiceOrder.is_deleted == False,  # noqa: E712
+            )
             .order_by(ServiceOrder.created_at.desc())
             .limit(limit)
             .all()

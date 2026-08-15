@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QDesktopServices, QUrl
 from PyQt6.QtGui import QAction, QCloseEvent
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -150,6 +150,10 @@ class BackupsPage(QWidget):
         self._btn_restore = QPushButton("📂 Restaurar copia")
         self._btn_restore.clicked.connect(self._restore_backup)
         btn_layout.addWidget(self._btn_restore)
+
+        self._btn_open_folder = QPushButton("📂 Abrir carpeta de backups")
+        self._btn_open_folder.clicked.connect(self._open_backup_folder)
+        btn_layout.addWidget(self._btn_open_folder)
         layout.addLayout(btn_layout)
 
         info = QLabel(
@@ -170,6 +174,11 @@ class BackupsPage(QWidget):
         from PyQt6.QtWidgets import QMessageBox
         if BackupService.restore_backup(self):
             QMessageBox.information(self, "Restaurada", "Copia restaurada. Reinicie la aplicación.")
+
+    def _open_backup_folder(self) -> None:
+        backup_dir = get_data_dir() / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(backup_dir)))
 
 
 class SettingsPage(QWidget):
@@ -363,6 +372,7 @@ class MainWindow(QMainWindow):
         print_action = QAction("Imprimir", self)
         print_action.setToolTip("Imprimir (Ctrl+P)")
         print_action.setShortcut("Ctrl+P")
+        print_action.triggered.connect(self._contextual_print)
         toolbar.addAction(print_action)
 
     def _on_section_selected(self, section: str) -> None:
@@ -415,3 +425,36 @@ class MainWindow(QMainWindow):
         self._show_orders()
         self._orders_page._search_input.setFocus()
         self._orders_page._search_input.selectAll()
+
+    def _contextual_print(self) -> None:
+        """Imprimir según la página activa (Ctrl+P contextual)."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        current = self._stack.currentWidget() if self._stack else None
+
+        if isinstance(current, OrdersPage):
+            row = current._table.currentRow()
+            order = current._order_at_row(row)
+            if order is None:
+                QMessageBox.warning(
+                    self, "Imprimir",
+                    "Selecciona una orden de la tabla para imprimir.",
+                )
+                return
+            try:
+                from luciotech.reports.pdf_service import ReceiptPDFService
+                pdf_path = ReceiptPDFService.generate(order)
+                QDesktopServices.openUrl(QUrl.fromLocalFile(pdf_path))
+                logger.info("Comprobante generado e imprimir: %s", pdf_path)
+            except Exception:
+                logger.exception("Error al generar comprobante para impresión")
+                QMessageBox.critical(
+                    self, "Error",
+                    "No se pudo generar el comprobante de impresión.",
+                )
+            return
+
+        QMessageBox.information(
+            self, "Imprimir",
+            "No hay nada para imprimir en esta vista.",
+        )

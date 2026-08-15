@@ -30,7 +30,9 @@ from PyQt6.QtWidgets import (
 )
 
 from luciotech.config import PRIORITIES, ORDER_STATUSES, ACCESSORIES_BY_TYPE
+from luciotech.database.connection import get_session
 from luciotech.database.models import Customer, Equipment
+from luciotech.database.repositories import OrderRepo
 from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
 from luciotech.services.settings_service import SettingsService
 from luciotech.ui.dialogs.customer_dialog import CustomerSelectDialog
@@ -51,6 +53,7 @@ class ReceptionPage(QWidget):
         self._equipment_service = EquipmentService()
         self._order_service = OrderService()
         self._settings_service = SettingsService()
+        self._order_repo = OrderRepo(get_session())
         self._selected_customer: Customer | None = None
         self._accessory_checks: list[QCheckBox] = []
         self._pending_photos: list[str] = []
@@ -138,6 +141,14 @@ class ReceptionPage(QWidget):
         form_layout.addRow("Dirección:", self._cust_address)
         form_layout.addRow("Observaciones:", self._cust_notes)
         layout.addLayout(form_layout)
+
+        # Historial de órdenes recientes del cliente
+        self._recent_orders_label = QLabel("Órdenes anteriores: seleccione un cliente")
+        self._recent_orders_label.setStyleSheet(
+            "color: palette(mid); padding: 6px; font-size: 12px;"
+        )
+        self._recent_orders_label.setWordWrap(True)
+        layout.addWidget(self._recent_orders_label)
 
         return group
 
@@ -323,6 +334,31 @@ class ReceptionPage(QWidget):
         self._cust_email.setText(customer.email or "")
         self._cust_address.setText(customer.address or "")
         self._cust_notes.setText(customer.notes or "")
+        self._load_recent_orders(customer)
+
+    def _load_recent_orders(self, customer: Customer) -> None:
+        """Cargar y mostrar las órdenes recientes del cliente seleccionado."""
+        try:
+            orders = self._order_repo.get_by_customer(customer.id, limit=5)
+        except Exception:
+            logger.exception("Error cargando órdenes recientes del cliente %d", customer.id)
+            self._recent_orders_label.setText("No se pudieron cargar las órdenes anteriores.")
+            return
+
+        if not orders:
+            self._recent_orders_label.setText(
+                f"Órdenes anteriores: este cliente no tiene órdenes registradas."
+            )
+            return
+
+        lines = [f"Órdenes recientes de {customer.full_name} (últimas {len(orders)}):"]
+        for order in orders:
+            date_str = order.intake_date.strftime("%Y-%m-%d") if order.intake_date else "—"
+            equip_type = order.equipment.equipment_type if order.equipment else "—"
+            lines.append(
+                f"  • {order.order_number}  |  {date_str}  |  {order.status}  |  {equip_type}"
+            )
+        self._recent_orders_label.setText("\n".join(lines))
 
     def _get_accessories_text(self) -> str:
         parts = []
@@ -535,6 +571,7 @@ class ReceptionPage(QWidget):
         self._cust_email.clear()
         self._cust_address.clear()
         self._cust_notes.clear()
+        self._recent_orders_label.setText("Órdenes anteriores: seleccione un cliente")
         self._equip_brand.clear()
         self._equip_model.clear()
         self._equip_serial.clear()

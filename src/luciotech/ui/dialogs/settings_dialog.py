@@ -6,7 +6,8 @@ import json
 import logging
 from datetime import datetime
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QUrl
+from PyQt6.QtGui import QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -24,10 +25,12 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QListWidget,
     QInputDialog,
+    QTextEdit,
 )
 
 from luciotech.config import (
     get_data_dir,
+    get_log_dir,
     EQUIPMENT_TYPES,
     ORDER_STATUSES,
     PRIORITIES,
@@ -91,6 +94,8 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._create_catalogs_tab(), "Tipos de equipo")
         # Copias de seguridad
         tabs.addTab(self._create_backup_tab(), "Copias de seguridad")
+        # Diagnóstico / Logs
+        tabs.addTab(self._create_diagnostics_tab(), "Diagnóstico")
 
         layout.addWidget(tabs)
 
@@ -288,6 +293,98 @@ class SettingsDialog(QDialog):
         self._refresh_backup_list()
 
         return tab
+
+    # ------------------------------------------------------------------
+    # Diagnostics / Logs tab
+    # ------------------------------------------------------------------
+
+    def _create_diagnostics_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Determine log file path
+        self._log_file_path = get_log_dir() / "app.log"
+
+        # Show the log file path
+        path_label = QLabel(f"Archivo de registro: {self._log_file_path}")
+        path_label.setWordWrap(True)
+        layout.addWidget(path_label)
+
+        # Read-only text area showing last N lines
+        self._log_text = QTextEdit()
+        self._log_text.setReadOnly(True)
+        self._log_text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        layout.addWidget(self._log_text)
+
+        # Buttons row
+        btn_layout = QHBoxLayout()
+
+        self._btn_copy_log = QPushButton("📋 Copiar al portapapeles")
+        self._btn_copy_log.clicked.connect(self._copy_log_to_clipboard)
+        btn_layout.addWidget(self._btn_copy_log)
+
+        self._btn_open_log = QPushButton("📂 Abrir archivo")
+        self._btn_open_log.clicked.connect(self._open_log_file)
+        btn_layout.addWidget(self._btn_open_log)
+
+        self._btn_refresh_log = QPushButton("🔄 Actualizar")
+        self._btn_refresh_log.clicked.connect(self._load_log_content)
+        btn_layout.addWidget(self._btn_refresh_log)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        # Load content after widgets exist
+        self._load_log_content()
+
+        return tab
+
+    def _load_log_content(self) -> None:
+        """Load the last lines of the log file into the text area."""
+        max_lines = 500
+        try:
+            if not self._log_file_path.exists():
+                self._log_text.setPlainText(
+                    "El archivo de registro aún no existe."
+                )
+                return
+            with open(self._log_file_path, "r", encoding="utf-8", errors="replace") as fh:
+                lines = fh.readlines()
+            tail = lines[-max_lines:]
+            self._log_text.setPlainText("".join(tail))
+            # Scroll to the bottom
+            scrollbar = self._log_text.verticalScrollBar()
+            if scrollbar is not None:
+                scrollbar.setValue(scrollbar.maximum())
+        except OSError as exc:
+            self._log_text.setPlainText(f"No se pudo leer el archivo: {exc}")
+
+    def _copy_log_to_clipboard(self) -> None:
+        """Copy the full log file content to the system clipboard."""
+        try:
+            if not self._log_file_path.exists():
+                QMessageBox.information(
+                    self, "Portapapeles", "El archivo de registro aún no existe."
+                )
+                return
+            content = self._log_file_path.read_text(encoding="utf-8", errors="replace")
+            clipboard = QGuiApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(content)
+                QMessageBox.information(
+                    self, "Portapapeles", "Contenido del registro copiado al portapapeles."
+                )
+        except OSError as exc:
+            QMessageBox.warning(self, "Error", f"No se pudo copiar el registro: {exc}")
+
+    def _open_log_file(self) -> None:
+        """Open the log file with the system's default application."""
+        if not self._log_file_path.exists():
+            QMessageBox.information(
+                self, "Abrir archivo", "El archivo de registro aún no existe."
+            )
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._log_file_path)))
 
     def _load_logo(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Seleccionar logo", "", "Images (*.png *.jpg *.jpeg)")

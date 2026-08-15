@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -22,10 +25,11 @@ from PyQt6.QtWidgets import (
     QDateEdit,
     QMessageBox,
     QMenu,
+    QFileDialog,
 )
 from PyQt6.QtGui import QKeySequence
 
-from luciotech.config import ORDER_STATUSES, PRIORITIES
+from luciotech.config import ORDER_STATUSES, PRIORITIES, get_data_dir
 from luciotech.database.models import ServiceOrder
 from luciotech.services.order_service import OrderService
 
@@ -45,7 +49,24 @@ class OrdersPage(QWidget):
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._apply_filters)
+        self._column_labels = [
+            "Nº Orden",
+            "Fecha ingreso",
+            "Cliente",
+            "Teléfono",
+            "Tipo equipo",
+            "Marca",
+            "Modelo",
+            "Nº Serie",
+            "Problema",
+            "Estado",
+            "Prioridad",
+            "Total",
+            "Saldo",
+        ]
+        self._column_config_path = get_data_dir() / "orders_columns.json"
         self._init_ui()
+        self._restore_column_config()
         self._load_orders()
 
     def _init_ui(self) -> None:
@@ -67,6 +88,16 @@ class OrdersPage(QWidget):
         self._btn_refresh = QPushButton("Actualizar")
         self._btn_refresh.clicked.connect(self._load_orders)
         search_layout.addWidget(self._btn_refresh)
+
+        self._btn_columns = QPushButton("Columnas")
+        self._btn_columns.setToolTip("Elegir columnas visibles")
+        self._btn_columns.clicked.connect(lambda: self._show_column_menu())
+        search_layout.addWidget(self._btn_columns)
+
+        self._btn_export = QPushButton("Exportar")
+        self._btn_export.setToolTip("Exportar resultados filtrados a CSV")
+        self._btn_export.clicked.connect(self._export_to_csv)
+        search_layout.addWidget(self._btn_export)
 
         self._chk_trash = QCheckBox("Ver papelera")
         self._chk_trash.setToolTip("Mostrar las órdenes eliminadas")
@@ -125,22 +156,8 @@ class OrdersPage(QWidget):
 
         # Tabla de órdenes
         self._table = QTableWidget()
-        self._table.setColumnCount(13)
-        self._table.setHorizontalHeaderLabels([
-            "Nº Orden",
-            "Fecha ingreso",
-            "Cliente",
-            "Teléfono",
-            "Tipo equipo",
-            "Marca",
-            "Modelo",
-            "Nº Serie",
-            "Problema",
-            "Estado",
-            "Prioridad",
-            "Total",
-            "Saldo",
-        ])
+        self._table.setColumnCount(len(self._column_labels))
+        self._table.setHorizontalHeaderLabels(self._column_labels)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSortingEnabled(True)
@@ -155,6 +172,10 @@ class OrdersPage(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._on_header_context_menu)
+        header.sectionResized.connect(self._save_column_config)
+        header.sectionMoved.connect(self._save_column_config)
 
         layout.addWidget(self._table)
 
@@ -341,3 +362,167 @@ class OrdersPage(QWidget):
             self._load_orders()
             self.orders_changed.emit()
             logger.info("Orden restaurada desde la papelera: %s", order.order_number)
+
+    def _on_header_context_menu(self, pos) -> None:
+        """Mostrar menú para toggle visibilidad de columnas."""
+        self._show_column_menu(pos)
+
+    def _show_column_menu(self, pos=None) -> None:
+        """Mostrar menú con checkboxes para toggle columnas."""
+        menu = QMenu(self)
+        header = self._table.horizontalHeader()
+        
+        for col_idx in range(self._table.columnCount()):
+            label = self._column_labels[col_idx]
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(not header.isSectionHidden(col_idx))
+            action.toggled.connect(lambda checked, c=col_idx: self._toggle_column(c, checked))
+        
+        if pos is not None:
+            menu.exec(header.viewport().mapToGlobal(pos))
+        else:
+            menu.exec(self._btn_columns.mapToGlobal(self._btn_columns.rect().bottomLeft()))
+
+    def _toggle_column(self, col_idx: int, visible: bool) -> None:
+        """Toggle visibilidad de una columna."""
+        self._table.setColumnHidden(col_idx, not visible)
+        self._save_column_config()
+
+    def _save_column_config(self) -> None:
+        """Guardar configuración de columnas (visibilidad, anchos, orden)."""
+        header = self._table.horizontalHeader()
+        config = {
+            "hidden": [],
+            "widths": {},
+            "order": [],
+        }
+        
+        # Guardar columnas ocultas
+        for col_idx in range(self._table.columnCount()):
+            if header.isSectionHidden(col_idx):
+                config["hidden"].append(col_idx)
+        
+        # Guardar anchos
+        for col_idx in range(self._table.columnCount()):
+            width = header.sectionSize(col_idx)
+            config["widths"][str(col_idx)] = width
+        
+        # Guardar orden visual
+        for visual_idx in range(self._table.columnCount()):
+            logical_idx = header.logicalIndex(visual_idx)
+            config["order"].append(logical_idx)
+        
+        try:
+            self._column_config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._column_config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error("Error guardando configuración de columnas: %s", e)
+
+    def _restore_column_config(self) -> None:
+        """Restaurar configuración de columnas."""
+        if not self._column_config_path.exists():
+            return
+        
+        try:
+            with open(self._column_config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception as e:
+            logger.error("Error cargando configuración de columnas: %s", e)
+            return
+        
+        header = self._table.horizontalHeader()
+        
+        # Restaurar orden
+        if "order" in config and len(config["order"]) == self._table.columnCount():
+            for visual_idx, logical_idx in enumerate(config["order"]):
+                current_visual = header.visualIndex(logical_idx)
+                if current_visual != visual_idx:
+                    header.moveSection(current_visual, visual_idx)
+        
+        # Restaurar anchos
+        if "widths" in config:
+            for col_idx_str, width in config["widths"].items():
+                col_idx = int(col_idx_str)
+                if 0 <= col_idx < self._table.columnCount():
+                    self._table.setColumnWidth(col_idx, width)
+        
+        # Restaurar visibilidad
+        if "hidden" in config:
+            for col_idx in config["hidden"]:
+                if 0 <= col_idx < self._table.columnCount():
+                    self._table.setColumnHidden(col_idx, True)
+
+    def _export_to_csv(self) -> None:
+        """Exportar resultados filtrados a CSV."""
+        if not self._orders:
+            QMessageBox.information(self, "Exportar", "No hay órdenes para exportar.")
+            return
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar a CSV",
+            f"ordenes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            "CSV Files (*.csv);;All Files (*)",
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            header = self._table.horizontalHeader()
+            visible_columns = []
+            for col_idx in range(self._table.columnCount()):
+                if not header.isSectionHidden(col_idx):
+                    visible_columns.append(col_idx)
+            
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                
+                # Escribir encabezados (solo columnas visibles)
+                headers = [self._column_labels[col_idx] for col_idx in visible_columns]
+                writer.writerow(headers)
+                
+                # Escribir datos
+                for order in self._orders:
+                    row_data = []
+                    customer = order.customer
+                    equipment = order.equipment
+                    
+                    # Mapear columnas a datos
+                    all_data = [
+                        order.order_number,
+                        order.intake_date.strftime("%Y-%m-%d %H:%M") if order.intake_date else "",
+                        customer.full_name if customer else "",
+                        customer.phone_primary if customer else "",
+                        equipment.equipment_type if equipment else "",
+                        equipment.brand or "" if equipment else "",
+                        equipment.model or "" if equipment else "",
+                        equipment.serial_number or "" if equipment else "",
+                        (order.reported_problem or "")[:80],
+                        order.status,
+                        order.priority,
+                        f"${order.total:,.2f}",
+                        f"${order.balance:,.2f}",
+                    ]
+                    
+                    # Solo columnas visibles
+                    for col_idx in visible_columns:
+                        row_data.append(all_data[col_idx])
+                    
+                    writer.writerow(row_data)
+            
+            QMessageBox.information(
+                self,
+                "Exportación exitosa",
+                f"Se exportaron {len(self._orders)} órdenes a:\n{file_path}",
+            )
+            logger.info("Órdenes exportadas a CSV: %s (%d órdenes)", file_path, len(self._orders))
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error al exportar",
+                f"No se pudo exportar a CSV:\n{str(e)}",
+            )
+            logger.error("Error exportando CSV: %s", e)
