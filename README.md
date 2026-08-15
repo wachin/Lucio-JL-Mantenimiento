@@ -257,5 +257,5 @@ Distribuido bajo la licencia **MIT**. Ver [`LICENSE`](LICENSE) para más detalle
 ---
 
 <p align="center">
-  Hecho con ❤️ para el servicio técnico de <strong>Ing. Joseph Lucio</strong>
+  Dios te bendiga <strong>Ing. Joseph Lucio</strong>
 </p>
