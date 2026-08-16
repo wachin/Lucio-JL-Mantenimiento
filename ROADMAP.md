@@ -43,6 +43,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Reinicio controlado de la conexión para pruebas aisladas.
 - [x] Migraciones Alembic reproducibles para actualizar instalaciones existentes
   (revisión `001_initial_schema` con todas las tablas del esquema actual).
+- [x] Migración aditiva automática para instalaciones previas sin la columna
+  `service_orders.budget_status`, conservando las órdenes existentes.
 - [x] Política de cierre explícito de sesiones de larga duración en widgets
   (método `cleanup()` en páginas, llamado desde `closeEvent` en MainWindow).
 - [ ] Índices y medición de rendimiento con bases de datos grandes.

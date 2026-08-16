@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.engine import Engine
 
@@ -50,12 +50,40 @@ def get_session() -> Session:
 
 
 def init_db() -> None:
-    """Inicializar la base de datos creando las tablas."""
+    """Inicializar la base de datos y actualizar esquemas anteriores."""
     from luciotech.database.models import Base  # noqa: F401
 
     engine = get_engine()
     Base.metadata.create_all(engine)
+    _upgrade_legacy_schema(engine)
     logger.info("Tablas creadas/verificadas")
+
+
+def _upgrade_legacy_schema(engine: Engine) -> None:
+    """Aplicar cambios aditivos necesarios en bases creadas anteriormente.
+
+    ``MetaData.create_all`` crea tablas ausentes, pero no agrega columnas a
+    tablas existentes. Estas migraciones son deliberadamente idempotentes para
+    que puedan ejecutarse en cada arranque sin alterar datos ya actualizados.
+    """
+    inspector = inspect(engine)
+    if "service_orders" not in inspector.get_table_names():
+        return
+
+    order_columns = {
+        column["name"] for column in inspector.get_columns("service_orders")
+    }
+    if "budget_status" not in order_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE service_orders "
+                    "ADD COLUMN budget_status VARCHAR(30) DEFAULT 'Pendiente'"
+                )
+            )
+        logger.info(
+            "Migración aplicada: service_orders.budget_status agregado"
+        )
 
 
 def reset_connection() -> None:
