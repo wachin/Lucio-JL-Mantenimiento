@@ -6,8 +6,8 @@ import json
 import logging
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QDesktopServices, QUrl
-from PyQt6.QtGui import QAction, QCloseEvent
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QUrl
+from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PyQt6.QtWidgets import (
     QMainWindow,
     QStackedWidget,
