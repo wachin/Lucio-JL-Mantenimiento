@@ -8,13 +8,25 @@ import tempfile
 import traceback
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QTimer
+from PyQt6.QtGui import QWheelEvent
+from PyQt6.QtWidgets import (
+    QAbstractScrollArea,
+    QAbstractSpinBox,
+    QApplication,
+    QComboBox,
+    QDial,
+    QMessageBox,
+    QSlider,
+    QWidget,
+)
 
 from luciotech.config import APP_NAME, get_data_dir, get_log_dir
 from luciotech.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
+
+_WHEEL_VALUE_WIDGETS = (QAbstractSpinBox, QComboBox, QSlider, QDial)
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +63,10 @@ class _SafeQApplication(QApplication):
 
     def notify(self, receiver, event):  # noqa: ANN001
         try:
+            if event.type() == QEvent.Type.Wheel and _redirect_value_wheel_event(
+                receiver, event
+            ):
+                return True
             return super().notify(receiver, event)
         except Exception as exc:
             tb_text = traceback.format_exc()
@@ -70,6 +86,65 @@ class _SafeQApplication(QApplication):
             except Exception:
                 pass
             return False
+
+
+def _redirect_value_wheel_event(receiver, event: QWheelEvent) -> bool:  # noqa: ANN001
+    """Impedir que rueda o touchpad alteren accidentalmente un valor.
+
+    Si el control está dentro de un área desplazable, el mismo gesto se envía
+    a dicha área para que la navegación vertical continúe con normalidad.
+    """
+    widget = receiver if isinstance(receiver, QWidget) else None
+    value_widget = None
+    current = widget
+    while current is not None:
+        if isinstance(current, _WHEEL_VALUE_WIDGETS):
+            value_widget = current
+            break
+        current = current.parentWidget()
+
+    if value_widget is None:
+        return False
+
+    current = value_widget.parentWidget()
+    while current is not None and not isinstance(current, QAbstractScrollArea):
+        current = current.parentWidget()
+
+    if current is not None:
+        viewport = current.viewport()
+        pixel_delta = event.pixelDelta()
+        if event.angleDelta().isNull() and not pixel_delta.isNull():
+            # Los touchpads suelen enviar desplazamientos precisos solo en
+            # píxeles. QScrollArea necesita la secuencia completa de fases para
+            # procesarlos; al redirigir un evento aislado, mover directamente
+            # la barra conserva un desplazamiento suave y predecible.
+            if abs(pixel_delta.y()) >= abs(pixel_delta.x()):
+                scroll_bar = current.verticalScrollBar()
+                delta = pixel_delta.y()
+            else:
+                scroll_bar = current.horizontalScrollBar()
+                delta = pixel_delta.x()
+            scroll_bar.setValue(scroll_bar.value() - delta)
+            event.accept()
+            return True
+
+        local_position = QPointF(
+            viewport.mapFromGlobal(event.globalPosition().toPoint())
+        )
+        redirected_event = QWheelEvent(
+            local_position,
+            event.globalPosition(),
+            event.pixelDelta(),
+            event.angleDelta(),
+            event.buttons(),
+            event.modifiers(),
+            event.phase(),
+            event.inverted(),
+        )
+        QCoreApplication.sendEvent(viewport, redirected_event)
+
+    event.accept()
+    return True
 
 
 def _on_about_to_quit() -> None:

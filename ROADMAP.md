@@ -59,6 +59,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Atajo `Ctrl+F` para buscar órdenes.
 - [x] Barra de estado.
 - [x] Persistencia de la referencia Python de la ventana principal.
+- [x] Bloqueo global de cambios accidentales en fechas, listas y campos
+  numéricos mediante rueda del ratón o desplazamiento de dos dedos; el gesto
+  continúa desplazando la pantalla contenedora.
 - [x] Conectar la acción global `Ctrl+P` a una impresión contextual válida
   (genera comprobante PDF de la orden seleccionada en Órdenes).
 - [ ] Iconos definitivos y sistema visual consistente.
