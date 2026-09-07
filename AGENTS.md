@@ -53,7 +53,10 @@ mantuvo abierta hasta que `timeout` la detuvo.
 ## Reglas importantes del código existente
 
 1. La conexión usa un motor y fábrica de sesiones globales. En pruebas que
-   cambien la ruta SQLite, llamar `reset_connection()` antes y después.
+   cambien la ruta SQLite, llamar `reset_connection()` antes y después. Este
+   método cierra todas las sesiones vivas y dispone el motor, lo que en Windows
+   libera el handle del archivo SQLite (evita `WinError 32` al limpiar el
+   directorio temporal).
 2. No conservar objetos ORM de una sesión para guardarlos directamente con otra.
    Los repositorios de clientes/equipos usan `merge`; seguir el mismo patrón.
 3. Las tablas ordenables deben guardar el objeto o ID en `Qt.UserRole`. Nunca
@@ -68,7 +71,9 @@ mantuvo abierta hasta que `timeout` la detuvo.
 
 ## Estado de verificación
 
-- Suite al preparar este handoff: **9 passed**.
+- Suite actual: **69 passed** en Windows (`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src pytest -q`).
+- `reset_connection()` cierra todas las sesiones antes de disponer el motor, lo
+  que evita `WinError 32` al limpiar directorios temporales SQLite en Windows.
 - Arranque offscreen validado en iteraciones recientes.
 - Los `__pycache__` históricos fueron retirados del índice y `.gitignore` evita
   que vuelvan a incorporarse.

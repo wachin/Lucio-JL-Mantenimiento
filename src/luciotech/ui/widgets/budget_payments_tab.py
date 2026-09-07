@@ -53,6 +53,11 @@ class BudgetPaymentsTab(QWidget):
         self._init_ui()
         self._load_data()
 
+    def set_order(self, order: ServiceOrder) -> None:
+        """Actualizar la orden referenciada y recargar conceptos/pagos en el sitio."""
+        self._order = order
+        self._load_data()
+
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         prefix = currency_prefix()

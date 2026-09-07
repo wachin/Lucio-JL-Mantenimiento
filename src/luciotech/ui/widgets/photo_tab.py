@@ -176,6 +176,10 @@ class PhotoTab(QWidget):
 
         self._list.currentItemChanged.connect(self._on_selection_changed)
 
+    def refresh(self) -> None:
+        """Recargar las fotografías en el sitio."""
+        self._load_photos()
+
     def _load_photos(self) -> None:
         self._list.clear()
         self._photos = self._photo_service.get_photos(self._order_id)

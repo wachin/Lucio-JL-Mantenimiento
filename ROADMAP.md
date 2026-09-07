@@ -57,6 +57,8 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Navegación mediante `QStackedWidget`.
 - [x] Atajo `Ctrl+N` para nueva recepción.
 - [x] Atajo `Ctrl+F` para buscar órdenes.
+- [x] Atajos `Ctrl+1`..`Ctrl+9` para saltar directamente a cada sección de la
+  barra lateral.
 - [x] Barra de estado.
 - [x] Persistencia de la referencia Python de la ventana principal.
 - [x] Bloqueo global de cambios accidentales en fechas, listas y campos
@@ -172,7 +174,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   (`completion_date` al reparar, `delivery_date` al entregar).
 - [x] Mostrar/ocultar contraseña/PIN en la ficha de orden
   (botón 👁 junto al campo, oculto por defecto).
-- [ ] Refrescar todas las pestañas sin reconstruir widgets y sesiones repetidamente.
+- [x] Refrescar todas las pestañas sin reconstruir widgets y sesiones repetidamente
+  (PhotoTab, HistoryTimeline y BudgetPaymentsTab se crean una sola vez y se
+  actualizan en el sitio mediante `refresh()`/`set_order()`).
 
 ## 10. Editor enriquecido
 
@@ -344,6 +348,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Contraseña/PIN oculto por defecto en formularios editables.
 - [ ] Revisión completa de contraste; aún existen colores fijos en algunos widgets.
 - [ ] Navegación integral solo con teclado y orden de tabulación revisado.
+- [x] Navegación entre secciones mediante atajos `Ctrl+1`..`Ctrl+9` y
+  sincronización bidireccional de la barra lateral (el foco puede regresar a la
+  barra al navegar desde el ratón).
 - [ ] Nombres accesibles y ayudas para lector de pantalla.
 - [x] Tamaño de fuente configurable (0 = predeterminado del sistema, 8–24 pt).
 - [x] Tooltips en la barra lateral (cada sección muestra "Ir a ...").
@@ -384,7 +391,9 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
   persistencia, backups seguros (Zip Slip, backup consistente, restauración
   atómica), presupuestos persistentes, papelera e historial global.
 - [x] Aislamiento de la base SQLite entre pruebas.
-- [x] Ejecución actual: `27 passed` con `PYTHONPATH=src pytest -q`.
+- [x] `reset_connection()` cierra todas las sesiones vivas antes de disponer del
+  motor, evitando que Windows retenga el archivo SQLite bloqueado (WinError 32).
+- [x] Ejecución actual: `69 passed` con `PYTHONPATH=src pytest -q` en Windows.
 - [x] `.gitignore` para cachés, entornos, builds y logs.
 - [ ] Pruebas de validaciones de duplicados y formatos configurables.
 - [x] Pruebas de papelera, restauración e historial global (cubiertas en `test_p0_features.py`).

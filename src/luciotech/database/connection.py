@@ -94,6 +94,11 @@ def reset_connection() -> None:
     después de llamar esta función.
     """
     global _engine, _session_factory
+    if _session_factory is not None:
+        # Cerrar todas las sesiones vivas para liberar los handles de archivo
+        # (imprescindible en Windows, donde un SQLite abierto bloquea el
+        # borrado/rotación de la base de datos temporal).
+        _session_factory.close_all()
     if _engine is not None:
         _engine.dispose()
     _session_factory = None

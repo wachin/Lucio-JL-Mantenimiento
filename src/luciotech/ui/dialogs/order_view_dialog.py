@@ -74,17 +74,22 @@ class OrderViewDialog(QDialog):
         self._diagnosis_tab = self._create_diagnosis_tab()
         self._tabs.addTab(self._diagnosis_tab, "Diagnóstico")
 
-        # Tab: Historial
-        self._history_tab = self._create_history_tab()
+        # Tab: Historial (se crea al cargar la orden)
+        self._history_tab = QWidget()
+        history_layout = QVBoxLayout(self._history_tab)
+        history_layout.setContentsMargins(0, 0, 0, 0)
+        self._history_timeline: HistoryTimeline | None = None
         self._tabs.addTab(self._history_tab, "Historial")
 
-        # Tab: Fotografías
-        self._photo_tab = QWidget()  # placeholder, created after order loaded
-        self._tabs.addTab(self._photo_tab, "Fotografías")
+        # Tab: Fotografías (se crea al cargar la orden)
+        self._photo_tab: PhotoTab | None = None
+        self._photo_placeholder = QWidget()
+        self._tabs.addTab(self._photo_placeholder, "Fotografías")
 
-        # Tab: Presupuesto y Pagos
-        self._budget_tab = QWidget()  # placeholder
-        self._tabs.addTab(self._budget_tab, "Presupuesto y Pagos")
+        # Tab: Presupuesto y Pagos (se crea al cargar la orden)
+        self._budget_tab: BudgetPaymentsTab | None = None
+        self._budget_placeholder = QWidget()
+        self._tabs.addTab(self._budget_placeholder, "Presupuesto y Pagos")
 
         layout.addWidget(self._tabs)
 
@@ -267,14 +272,6 @@ class OrderViewDialog(QDialog):
 
         return tab
 
-    def _create_history_tab(self) -> QWidget:
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self._history_timeline = HistoryTimeline(self._order) if self._order else QLabel("Sin orden")
-        layout.addWidget(self._history_timeline)
-        return tab
-
     def _load_order(self) -> None:
         self._order = self._order_service.get_by_id(self._order_id)
         if not self._order:
@@ -336,26 +333,32 @@ class OrderViewDialog(QDialog):
         if self._order.recommendations_html:
             self._editor_recommendations.set_html(self._order.recommendations_html)
 
-        # Set up photo tab
-        photo_tab = PhotoTab(self._order_id, order.order_number, self)
-        idx = self._tabs.indexOf(self._photo_tab)
-        self._tabs.removeTab(idx)
-        self._tabs.insertTab(idx, photo_tab, "Fotografías")
-        self._photo_tab = photo_tab
+        # Set up photo tab (created once, refreshed afterwards)
+        if self._photo_tab is None:
+            photo_tab = PhotoTab(self._order_id, order.order_number, self)
+            idx = self._tabs.indexOf(self._photo_placeholder)
+            self._tabs.removeTab(idx)
+            self._tabs.insertTab(idx, photo_tab, "Fotografías")
+            self._photo_tab = photo_tab
+        else:
+            self._photo_tab.refresh()
 
-        # Sustituir el marcador inicial por el historial de la orden cargada.
-        history_layout = self._history_tab.layout()
-        history_layout.removeWidget(self._history_timeline)
-        self._history_timeline.deleteLater()
-        self._history_timeline = HistoryTimeline(order, self._history_tab)
-        history_layout.addWidget(self._history_timeline)
+        # Set up history tab (created once, refreshed afterwards)
+        if self._history_timeline is None:
+            self._history_timeline = HistoryTimeline(order, self._history_tab)
+            self._history_tab.layout().addWidget(self._history_timeline)
+        else:
+            self._history_timeline.set_order(order)
 
-        # Set up budget tab
-        budget_tab = BudgetPaymentsTab(self._order, self)
-        idx = self._tabs.indexOf(self._budget_tab)
-        self._tabs.removeTab(idx)
-        self._tabs.insertTab(idx, budget_tab, "Presupuesto y Pagos")
-        self._budget_tab = budget_tab
+        # Set up budget tab (created once, refreshed afterwards)
+        if self._budget_tab is None:
+            budget_tab = BudgetPaymentsTab(self._order, self)
+            idx = self._tabs.indexOf(self._budget_placeholder)
+            self._tabs.removeTab(idx)
+            self._tabs.insertTab(idx, budget_tab, "Presupuesto y Pagos")
+            self._budget_tab = budget_tab
+        else:
+            self._budget_tab.set_order(self._order)
 
     def _save_diagnosis(self) -> None:
         """Guardar diagnóstico, trabajo y recomendaciones."""

@@ -392,16 +392,45 @@ class MainWindow(QMainWindow):
         print_action.triggered.connect(self._contextual_print)
         toolbar.addAction(print_action)
 
+        self._setup_section_shortcuts()
+
+    def _setup_section_shortcuts(self) -> None:
+        """Crear atajos Ctrl+1..Ctrl+9 para saltar a cada sección."""
+        from PyQt6.QtGui import QKeySequence
+        for index, section in enumerate(Sidebar.SECTIONS):
+            if index >= 9:
+                break
+            action = QAction(self)
+            action.setShortcut(QKeySequence(f"Ctrl+{index + 1}"))
+            action.setToolTip(f"Ir a {section} (Ctrl+{index + 1})")
+            action.triggered.connect(
+                lambda _checked=False, sec=section: self._go_to_section(sec)
+            )
+            self.addAction(action)
+
     def _on_section_selected(self, section: str) -> None:
         """Cambiar la página visible según la sección seleccionada."""
-        if self._stack and section in self._pages:
-            index = list(self._pages.keys()).index(section)
-            self._stack.setCurrentIndex(index)
-            if section == "Inicio":
-                self._home_page.refresh()
-            if section == "Historial":
-                self._history_page.refresh()
-            self.statusBar().showMessage(f"Sección: {section}")
+        self._go_to_section(section, focus_sidebar=True)
+
+    def _go_to_section(self, section: str, focus_sidebar: bool = False) -> None:
+        """Cambiar a una sección y sincronizar la barra lateral."""
+        if not self._stack or section not in self._pages:
+            return
+        index = list(self._pages.keys()).index(section)
+        self._stack.setCurrentIndex(index)
+        if section == "Inicio":
+            self._home_page.refresh()
+        if section == "Historial":
+            self._history_page.refresh()
+        self.statusBar().showMessage(f"Sección: {section}")
+        # Sincronizar la barra lateral sin reemitir la señal (evita ciclos)
+        if self._sidebar and self._sidebar.get_list():
+            list_widget = self._sidebar.get_list()
+            list_widget.blockSignals(True)
+            list_widget.setCurrentRow(index)
+            list_widget.blockSignals(False)
+        if focus_sidebar and self._sidebar:
+            self._sidebar.get_list().setFocus()
 
     def _on_order_opened(self, order_id: int) -> None:
         """Abrir vista de orden o ir a nueva recepción."""
