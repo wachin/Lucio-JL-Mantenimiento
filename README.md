@@ -122,6 +122,100 @@ pyinstaller packaging/jl-mantenimiento.spec
 dist\JL_Mantenimiento.exe
 ```
 
+### Windows — Guía de desarrollo
+
+Sección orientada a desarrolladores que quieran **instalar y ejecutar el
+proyecto desde cero** en Windows 10/11. Presupone que ya tienes Python (3.11+)
+instalado y añadido al `PATH`.
+
+#### 1. Crear el entorno virtual (solo la primera vez)
+
+Desde la carpeta del proyecto (`C:\D\Lucio-JL-Mantenimiento`):
+
+```bat
+python -m venv venv
+```
+
+Esto crea una carpeta `venv\` aislada que contiene el intérprete y los paquetes.
+Solo hay que ejecutarlo **una sola vez por proyecto**.
+
+#### 2. Activar el entorno virtual
+
+```bat
+venv\Scripts\activate
+```
+
+Notarás que el prompt de la terminal cambia y aparece `(venv)`. Todo lo que
+instales o ejecutes a partir de aquí usa el Python de `venv`.
+
+#### 3. Instalar todas las dependencias
+
+Con el entorno activado:
+
+```bat
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+`requirements.txt` incluye:
+
+| Paquete | Función |
+|---|---|
+| `PyQt6` | Interfaz gráfica |
+| `PyQt6-tools` | Utilidades/designer de Qt (opcional, para desarrollo) |
+| `SQLAlchemy` | ORM para la base de datos SQLite |
+| `alembic` | Migraciones de base de datos |
+| `platformdirs` | Rutas de datos multiplataforma |
+| `Pillow` | Procesamiento de imágenes |
+| `reportlab` | Generación de PDF |
+| `matplotlib` | Gráficas y reportes |
+
+Para poder ejecutar la **suite de pruebas** (`pytest`), instala además las
+dependencias de desarrollo:
+
+```bat
+pip install pytest pytest-qt
+```
+
+> Puedes instalar todo de una vez con `pip install -r requirements.txt pytest pytest-qt`.
+
+#### 4. Lanzar el programa
+
+```bat
+python main.py
+```
+
+#### 5. Desactivar el entorno virtual
+
+Cuando termines de trabajar, devuelve la terminal a la normalidad:
+
+```bat
+deactivate
+```
+
+> **Importante:** no hace falta crear el `venv` de nuevo en cada sesión. Una vez
+> creado e instaladas las dependencias, para lanzar el programa solo tienes que
+> activar el entorno y ejecutar `python main.py`:
+
+```bat
+cd C:\D\Lucio-JL-Mantenimiento
+venv\Scripts\activate
+python main.py
+```
+
+Si prefieres no activar el entorno manualmente, puedes usar el lanzador incluido
+(`iniciar.bat`), que activa el entorno y arranca la aplicación con doble clic.
+
+#### Ejecutar las pruebas
+
+Con el entorno activado:
+
+```bat
+$env:PYTHONDONTWRITEBYTECODE="1"
+$env:PYTHONPATH="src"
+python -m pytest -q
+```
+
 ### AppImage (Linux)
 
 ```bash
