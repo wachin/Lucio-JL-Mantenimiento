@@ -1,19 +1,43 @@
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyd
 
-.pytest_cache/
-.coverage
-htmlcov/
-
+# Virtual environments
 .venv/
 venv/
 env/
+envs/
+.env/
 
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+*.tox/
+
+# Packaging / build
 build/
 dist/
 AppDir/
 *.egg-info/
 *.AppImage
+*.spec.bak
 
+# Logs
 *.log
+logs/
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Qt / Python tooling
+*.ui~
