@@ -187,6 +187,30 @@ def test_payment_and_balance(setup_test_db):
     assert order.balance == 50.0
 
 
+def test_parts_labor_total_minus_advance(setup_test_db):
+    """El total combina repuestos y reparación, descontando el anticipo."""
+    from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
+
+    customer_svc = CustomerService()
+    equip_svc = EquipmentService()
+    order_svc = OrderService()
+    customer, _ = customer_svc.create_customer("Costos", "0999999999")
+    equipment, _ = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
+
+    order = order_svc.create_order(
+        customer,
+        equipment,
+        datetime.now(),
+        parts_cost=150.0,
+        labor_cost=80.0,
+        advance_payment=50.0,
+    )
+
+    assert order.total == 230.0
+    assert order.advance_payment == 50.0
+    assert order.balance == 180.0
+
+
 def test_database_persistence(setup_test_db):
     """Prueba: datos persisten tras cerrar y reabrir conexión."""
     from luciotech.services.order_service import CustomerService

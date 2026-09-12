@@ -433,7 +433,9 @@ class ReceiptPDFService:
 
         # Costos
         builder._add_section("Costos iniciales")
-        builder._add_field("Costo de diagnóstico", _money(order.diagnostic_cost, settings["currency"]))
+        builder._add_field("Valor de repuestos", _money(order.parts_cost, settings["currency"]))
+        builder._add_field("Valor de reparación", _money(order.labor_cost, settings["currency"]))
+        builder._add_field("Total", _money(order.total, settings["currency"]))
         builder._add_field("Anticipo recibido", _money(order.advance_payment, settings["currency"]))
         builder._add_field("Saldo pendiente", _money(order.balance, settings["currency"]))
 
@@ -543,12 +545,8 @@ class TechnicalReportPDFService:
         builder._add_section("Costos")
         cost_data = [
             ["Concepto", "Monto"],
-            ["Diagnóstico", _money(order.diagnostic_cost, settings["currency"])],
             ["Repuestos", _money(order.parts_cost, settings["currency"])],
-            ["Mano de obra", _money(order.labor_cost, settings["currency"])],
-            ["Subtotal", _money(order.total, settings["currency"])],
-            ["Descuento", f"-{_money(order.discount, settings['currency'])}"],
-            ["Impuestos", _money(order.tax, settings["currency"])],
+            ["Reparación", _money(order.labor_cost, settings["currency"])],
             ["TOTAL", _money(order.total, settings["currency"])],
             ["Anticipo", f"-{_money(order.advance_payment, settings['currency'])}"],
             ["SALDO PENDIENTE", _money(order.balance, settings["currency"])],

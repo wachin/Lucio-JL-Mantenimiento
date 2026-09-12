@@ -443,6 +443,8 @@ class OrderService:
         priority: str = "Normal",
         technician: str = "",
         diagnostic_cost: float = 0.0,
+        parts_cost: float = 0.0,
+        labor_cost: float = 0.0,
         advance_payment: float = 0.0,
         status: str = "Recibido",
         reported_problem: str = "",
@@ -450,7 +452,11 @@ class OrderService:
     ) -> ServiceOrder:
         """Crear una nueva orden de servicio."""
         order_number = self.generate_order_number()
-        total = diagnostic_cost
+        if parts_cost < 0 or labor_cost < 0 or advance_payment < 0:
+            raise ValueError("Los valores de repuestos, reparación y anticipo no pueden ser negativos")
+        total = parts_cost + labor_cost
+        if total == 0 and diagnostic_cost > 0:
+            total = diagnostic_cost
         balance = total - advance_payment
 
         order = ServiceOrder(
@@ -464,6 +470,8 @@ class OrderService:
             technician=technician.strip() or None,
             reported_problem=reported_problem.strip() or None,
             diagnostic_cost=diagnostic_cost,
+            parts_cost=parts_cost,
+            labor_cost=labor_cost,
             total=total,
             advance_payment=advance_payment,
             balance=balance,
