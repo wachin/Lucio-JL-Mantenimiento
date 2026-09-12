@@ -27,7 +27,7 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 from luciotech.database.models import ServiceOrder, Photo, BudgetConcept
-from luciotech.config import get_data_dir
+from luciotech.config import DEFAULT_SERVICE_CONDITIONS, get_data_dir
 from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -447,10 +447,7 @@ class ReceiptPDFService:
         settings_svc = SettingsService()
         conditions = settings_svc.get("service_conditions", "")
         if not conditions:
-            conditions = (
-                "El plazo de garantía comienza a partir de la fecha de entrega. "
-                "Los datos del equipo se verifican en presencia del cliente."
-            )
+            conditions = DEFAULT_SERVICE_CONDITIONS
         builder._add_section("Condiciones del Servicio")
         builder.story.append(Paragraph(escape(conditions), builder.styles["ValueStyle"]))
 
@@ -750,6 +747,15 @@ class DeliveryReceiptPDFService:
         # Garantía
         builder._add_section("Garantía")
         builder._add_field("Período de garantía", f"{order.warranty_days} días a partir de la fecha de entrega")
+
+        builder._add_section("Términos y condiciones de entrega")
+        conditions = SettingsService().get("service_conditions", "") or DEFAULT_SERVICE_CONDITIONS
+        builder.story.append(
+            Paragraph(
+                escape(conditions).replace("\n", "<br/>"),
+                builder.styles["ValueStyle"],
+            )
+        )
 
         # Firmas
         builder.add_signature_lines([("Cliente (recibe)", "Técnico (entrega)")])
