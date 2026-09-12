@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QCloseEvent
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,

@@ -211,6 +211,53 @@ def test_parts_labor_total_minus_advance(setup_test_db):
     assert order.balance == 180.0
 
 
+def test_pdf_reports_generate(setup_test_db):
+    """Los tres reportes principales generan archivos PDF válidos."""
+    from luciotech.database.connection import get_session
+    from luciotech.database.models import BudgetConcept
+    from luciotech.reports.pdf_service import (
+        BudgetPDFService,
+        ReceiptPDFService,
+        TechnicalReportPDFService,
+    )
+    from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
+
+    customer_svc = CustomerService()
+    equip_svc = EquipmentService()
+    order_svc = OrderService()
+    customer, _ = customer_svc.create_customer("PDF", "0999999999")
+    equipment, _ = equip_svc.create_equipment(customer.id, "Laptop", reported_problem="No enciende")
+    order = order_svc.create_order(
+        customer,
+        equipment,
+        datetime.now(),
+        parts_cost=40.0,
+        labor_cost=60.0,
+        advance_payment=20.0,
+        reported_problem="No enciende",
+    )
+    concept = BudgetConcept(
+        order_id=order.id,
+        concept_type="Repuesto",
+        description="Adaptador",
+        quantity=1,
+        unit_price=40.0,
+        subtotal=40.0,
+    )
+    session = get_session()
+    session.add(concept)
+    session.commit()
+
+    for generator, suffix, args in (
+        (ReceiptPDFService.generate, "receipt.pdf", ()),
+        (TechnicalReportPDFService.generate, "technical.pdf", ()),
+        (BudgetPDFService.generate, "budget.pdf", ([concept],)),
+    ):
+        path = Path(setup_test_db).parent / suffix
+        generator(order, *args, output_path=str(path))
+        assert path.read_bytes().startswith(b"%PDF")
+
+
 def test_database_persistence(setup_test_db):
     """Prueba: datos persisten tras cerrar y reabrir conexión."""
     from luciotech.services.order_service import CustomerService
