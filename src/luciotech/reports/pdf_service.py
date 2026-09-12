@@ -27,7 +27,7 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 from luciotech.database.models import ServiceOrder, Photo, BudgetConcept
-from luciotech.config import get_data_dir
+from luciotech.config import DEFAULT_SERVICE_CONDITIONS, get_data_dir
 from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -335,30 +335,30 @@ class PDFBuilder:
         self._page_count += 1
 
     def build(self) -> bytes:
-        """Generar el PDF con numeración de páginas y retornar bytes.
-
-        Realiza dos pasadas: la primera cuenta las páginas totales y la
-        segunda dibuja el pie 'Página X de Y' en cada página.
-        """
-        # --- First pass: count total pages ---
-        self._total_pages = None
-        self._page_count = 0
-        self.doc.build(self.story)
-        self._total_pages = self._page_count
-
-        # --- Second pass: render with page numbers ---
+        """Generar el PDF y retornar sus bytes."""
         self.buffer = BytesIO()
         self.doc.filename = self.buffer
-        self._page_count = 1  # pages are 1-indexed
-        self.doc.afterPage = self._page_number_after_page
+        self._total_pages = None
+        self._page_count = 1
         self.doc.build(
             self.story,
-            onFirstPage=self._page_number_callback,
-            onLaterPages=self._page_number_callback,
+            onFirstPage=self._draw_page_number,
+            onLaterPages=self._draw_page_number,
         )
-        # Reset afterPage so reused builders don't carry stale state
-        self.doc.afterPage = None
         return self.buffer.getvalue()
+
+    def _draw_page_number(self, canvas, doc) -> None:
+        """Dibujar el número de página sin reutilizar el contenido del PDF."""
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#888888"))
+        canvas.drawCentredString(
+            self.page_size[0] / 2,
+            1.2 * cm,
+            f"Página {self._page_count}",
+        )
+        canvas.restoreState()
+        self._page_count += 1
 
     def save_to_file(self, file_path: str) -> str:
         """Generar y guardar PDF. Retorna la ruta."""
@@ -433,7 +433,9 @@ class ReceiptPDFService:
 
         # Costos
         builder._add_section("Costos iniciales")
-        builder._add_field("Costo de diagnóstico", _money(order.diagnostic_cost, settings["currency"]))
+        builder._add_field("Valor de repuestos", _money(order.parts_cost, settings["currency"]))
+        builder._add_field("Valor de reparación", _money(order.labor_cost, settings["currency"]))
+        builder._add_field("Total", _money(order.total, settings["currency"]))
         builder._add_field("Anticipo recibido", _money(order.advance_payment, settings["currency"]))
         builder._add_field("Saldo pendiente", _money(order.balance, settings["currency"]))
 
@@ -445,10 +447,7 @@ class ReceiptPDFService:
         settings_svc = SettingsService()
         conditions = settings_svc.get("service_conditions", "")
         if not conditions:
-            conditions = (
-                "El plazo de garantía comienza a partir de la fecha de entrega. "
-                "Los datos del equipo se verifican en presencia del cliente."
-            )
+            conditions = DEFAULT_SERVICE_CONDITIONS
         builder._add_section("Condiciones del Servicio")
         builder.story.append(Paragraph(escape(conditions), builder.styles["ValueStyle"]))
 
@@ -543,12 +542,8 @@ class TechnicalReportPDFService:
         builder._add_section("Costos")
         cost_data = [
             ["Concepto", "Monto"],
-            ["Diagnóstico", _money(order.diagnostic_cost, settings["currency"])],
             ["Repuestos", _money(order.parts_cost, settings["currency"])],
-            ["Mano de obra", _money(order.labor_cost, settings["currency"])],
-            ["Subtotal", _money(order.total, settings["currency"])],
-            ["Descuento", f"-{_money(order.discount, settings['currency'])}"],
-            ["Impuestos", _money(order.tax, settings["currency"])],
+            ["Reparación", _money(order.labor_cost, settings["currency"])],
             ["TOTAL", _money(order.total, settings["currency"])],
             ["Anticipo", f"-{_money(order.advance_payment, settings['currency'])}"],
             ["SALDO PENDIENTE", _money(order.balance, settings["currency"])],
@@ -642,14 +637,15 @@ class BudgetPDFService:
 
         # Resumen
         builder._add_section("Resumen")
-        discount = order.discount
-        tax = order.tax
-        total = subtotal - discount + tax
+        parts_cost = order.parts_cost or 0.0
+        labor_cost = order.labor_cost or 0.0
+        total = parts_cost + labor_cost
+        if not concepts and total == 0:
+            total = order.total
 
         summary_data = [
-            ["Subtotal", _money(subtotal, currency)],
-            ["Descuento", f"-{_money(discount, currency)}"],
-            ["Impuestos", _money(tax, currency)],
+            ["Repuestos", _money(parts_cost, currency)],
+            ["Reparación", _money(labor_cost, currency)],
             ["TOTAL", _money(total, currency)],
             ["Anticipo", f"-{_money(order.advance_payment, currency)}"],
             ["SALDO PENDIENTE", _money(total - order.advance_payment, currency)],
@@ -751,6 +747,15 @@ class DeliveryReceiptPDFService:
         # Garantía
         builder._add_section("Garantía")
         builder._add_field("Período de garantía", f"{order.warranty_days} días a partir de la fecha de entrega")
+
+        builder._add_section("Términos y condiciones de entrega")
+        conditions = SettingsService().get("service_conditions", "") or DEFAULT_SERVICE_CONDITIONS
+        builder.story.append(
+            Paragraph(
+                escape(conditions).replace("\n", "<br/>"),
+                builder.styles["ValueStyle"],
+            )
+        )
 
         # Firmas
         builder.add_signature_lines([("Cliente (recibe)", "Técnico (entrega)")])

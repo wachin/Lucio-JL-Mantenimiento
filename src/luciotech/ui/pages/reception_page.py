@@ -128,6 +128,8 @@ class ReceptionPage(QWidget):
         # Campos adicionales del cliente
         form_layout = QFormLayout()
         self._cust_id = QLineEdit()
+        self._cust_province = QLabel("Provincia: —")
+        self._cust_id.textChanged.connect(self._update_customer_province)
         self._cust_phone = QLineEdit()
         self._cust_phone2 = QLineEdit()
         self._cust_email = QLineEdit()
@@ -135,6 +137,7 @@ class ReceptionPage(QWidget):
         self._cust_notes = QLineEdit()
 
         form_layout.addRow("Identificación:", self._cust_id)
+        form_layout.addRow("", self._cust_province)
         form_layout.addRow("Teléfono principal:", self._cust_phone)
         form_layout.addRow("Teléfono secundario:", self._cust_phone2)
         form_layout.addRow("Correo electrónico:", self._cust_email)
@@ -242,11 +245,17 @@ class ReceptionPage(QWidget):
 
         # Costos
         cost_layout = QHBoxLayout()
-        self._recv_diag_cost = QDoubleSpinBox()
-        self._recv_diag_cost.setMaximum(999999.99)
-        self._recv_diag_cost.setPrefix("$ ")
-        cost_layout.addWidget(QLabel("Costo diagnóstico:"))
-        cost_layout.addWidget(self._recv_diag_cost)
+        self._recv_parts_cost = QDoubleSpinBox()
+        self._recv_parts_cost.setMaximum(999999.99)
+        self._recv_parts_cost.setPrefix("$ ")
+        cost_layout.addWidget(QLabel("Valor de repuestos:"))
+        cost_layout.addWidget(self._recv_parts_cost)
+
+        self._recv_labor_cost = QDoubleSpinBox()
+        self._recv_labor_cost.setMaximum(999999.99)
+        self._recv_labor_cost.setPrefix("$ ")
+        cost_layout.addWidget(QLabel("Valor de reparación:"))
+        cost_layout.addWidget(self._recv_labor_cost)
 
         self._recv_advance = QDoubleSpinBox()
         self._recv_advance.setMaximum(999999.99)
@@ -335,6 +344,10 @@ class ReceptionPage(QWidget):
         self._cust_address.setText(customer.address or "")
         self._cust_notes.setText(customer.notes or "")
         self._load_recent_orders(customer)
+
+    def _update_customer_province(self, id_number: str) -> None:
+        province = self._customer_service.get_ecuadorian_province(id_number.strip())
+        self._cust_province.setText(f"Provincia: {province or '—'}")
 
     def _load_recent_orders(self, customer: Customer) -> None:
         """Cargar y mostrar las órdenes recientes del cliente seleccionado."""
@@ -438,10 +451,10 @@ class ReceptionPage(QWidget):
                 return "La fecha estimada de entrega no puede ser anterior a la fecha de ingreso."
 
         # Validar anticipo
-        diag_cost = self._recv_diag_cost.value()
+        total = self._recv_parts_cost.value() + self._recv_labor_cost.value()
         advance = self._recv_advance.value()
-        if advance > 0 and diag_cost > 0 and advance > diag_cost:
-            return "El anticipo no puede superar el costo de diagnóstico."
+        if advance > total:
+            return "El anticipo no puede superar el total de repuestos más reparación."
 
         return None
 
@@ -455,7 +468,9 @@ class ReceptionPage(QWidget):
             f"Número de orden: {order_number}\n"
             f"Cliente: {customer_name}\n"
             f"Equipo: {equipment_info}\n"
-            f"Costo diagnóstico: ${self._recv_diag_cost.value():,.2f}\n"
+            f"Valor de repuestos: ${self._recv_parts_cost.value():,.2f}\n"
+            f"Valor de reparación: ${self._recv_labor_cost.value():,.2f}\n"
+            f"Total: ${(self._recv_parts_cost.value() + self._recv_labor_cost.value()):,.2f}\n"
             f"Anticipo: ${self._recv_advance.value():,.2f}\n"
             f"Saldo: ${total:,.2f}"
         )
@@ -480,9 +495,10 @@ class ReceptionPage(QWidget):
                 f"{self._equip_type.currentText()} "
                 f"{self._equip_brand.text()} {self._equip_model.text()}".strip()
             )
-            diag_cost = self._recv_diag_cost.value()
+            parts_cost = self._recv_parts_cost.value()
+            labor_cost = self._recv_labor_cost.value()
             advance = self._recv_advance.value()
-            balance = diag_cost - advance
+            balance = parts_cost + labor_cost - advance
 
             if not self._show_confirmation(order_number, customer.full_name, equipment_info, balance):
                 return
@@ -559,7 +575,8 @@ class ReceptionPage(QWidget):
                     estimated_delivery_date=estimated_date,
                     priority=self._recv_priority.currentText(),
                     technician=self._recv_technician.text(),
-                    diagnostic_cost=diag_cost,
+                    parts_cost=parts_cost,
+                    labor_cost=labor_cost,
                     advance_payment=advance,
                     status=self._recv_status.currentText(),
                     reported_problem=problem,
@@ -629,7 +646,8 @@ class ReceptionPage(QWidget):
         self._equip_physical.clear()
         self._equip_problem.clear()
         self._equip_notes.clear()
-        self._recv_diag_cost.setValue(0)
+        self._recv_parts_cost.setValue(0)
+        self._recv_labor_cost.setValue(0)
         self._recv_advance.setValue(0)
         self._recv_technician.setText(
             self._settings_service.get("technician_name", "Ing. Joseph Lucio")

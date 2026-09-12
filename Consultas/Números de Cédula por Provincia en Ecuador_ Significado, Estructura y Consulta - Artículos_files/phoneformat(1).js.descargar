@@ -1,0 +1,263 @@
+/**
+ * Simple Phone Formatter for Native HTML/JS
+ * Supports dynamic mask changes and multiple formats per country
+ */
+const PhoneFormatter = (function () {
+  "use strict";
+
+  const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+  class PhoneInput {
+    constructor(element, mask, onInput, formats = null) {
+      this.element = element;
+      this.mask = mask;
+      this.formats = formats || [mask]; // Support multiple formats
+      this.onInput = onInput;
+      this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+      this.element.addEventListener("input", this.handleInput.bind(this));
+      this.element.addEventListener("keydown", this.handleKeyDown.bind(this));
+      this.element.addEventListener("focus", this.handleFocus.bind(this));
+      this.element.addEventListener("click", this.handleClick.bind(this));
+      this.element.addEventListener("paste", this.handlePaste.bind(this));
+    }
+
+    updateMask(newMask, formats = null) {
+      this.mask = newMask;
+      this.formats = formats || [newMask];
+      const digits = this.getDigits(this.element.value);
+      this.element.value = this.formatValue(digits);
+      this.setCursorToEnd();
+    }
+
+    // Get the best matching format based on number of digits
+    getBestFormat(digitCount) {
+      if (!this.formats || this.formats.length === 1) {
+        return this.mask;
+      }
+
+      // Find format that matches the digit count
+      for (const format of this.formats) {
+        const formatDigitCount = (format.match(/_/g) || []).length;
+        if (digitCount <= formatDigitCount) {
+          return format;
+        }
+      }
+
+      // Return the longest format if digit count exceeds all formats
+      return this.formats[this.formats.length - 1];
+    }
+
+    getDigits(value) {
+      return (value || "").replace(/\D/g, "");
+    }
+
+    formatValue(digits) {
+      if (!digits) return "";
+
+      // Get the best format based on digit count
+      const currentMask = this.getBestFormat(digits.length);
+
+      let formatted = "";
+      let digitIndex = 0;
+
+      for (let i = 0; i < currentMask.length && digitIndex < digits.length; i++) {
+        if (currentMask[i] === "_") {
+          formatted += digits[digitIndex];
+          digitIndex++;
+        } else {
+          formatted += currentMask[i];
+        }
+      }
+
+      return formatted;
+    }
+
+    handleInput(e) {
+      const cursorPos = this.element.selectionStart;
+      const oldValue = this.element.value;
+      const digits = this.getDigits(oldValue);
+      const formatted = this.formatValue(digits);
+
+      if (formatted !== oldValue) {
+        this.element.value = formatted;
+        this.adjustCursor(oldValue, formatted, cursorPos);
+      }
+
+      if (this.onInput) {
+        this.onInput(e, this.element);
+      }
+    }
+
+    handleKeyDown(e) {
+      const key = e.key;
+
+      if (["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && ["a", "c", "v", "x", "A", "C", "V", "X"].includes(key)) {
+        return;
+      }
+
+      if (!DIGITS.includes(key)) {
+        e.preventDefault();
+      }
+    }
+
+    handlePaste(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData("text");
+      const digits = this.getDigits(pastedText);
+
+      if (digits) {
+        const currentDigits = this.getDigits(this.element.value);
+        const cursorPos = this.element.selectionStart;
+        const valueBeforeCursor = this.element.value.substring(0, cursorPos);
+        const digitsBeforeCursor = this.getDigits(valueBeforeCursor);
+        const newDigits = digitsBeforeCursor + digits + currentDigits.substring(digitsBeforeCursor.length);
+        const formatted = this.formatValue(newDigits);
+
+        this.element.value = formatted;
+        this.setCursorToEnd();
+
+        if (this.onInput) {
+          this.onInput(new Event("input"), this.element);
+        }
+      }
+    }
+
+    handleFocus(e) {
+      if (!this.element.value) {
+        this.element.value = "";
+      }
+
+      setTimeout(() => {
+        if (this.element.value) {
+          this.setCursorToEnd();
+        } else {
+          const firstEditablePos = this.getFirstEditablePosition();
+          this.element.setSelectionRange(firstEditablePos, firstEditablePos);
+        }
+      }, 0);
+    }
+
+    handleClick(e) {
+      setTimeout(() => {
+        const cursorPos = this.element.selectionStart;
+        const value = this.element.value;
+
+        if (!value) return;
+
+        const digits = this.getDigits(value);
+        const currentMask = this.getBestFormat(digits.length);
+
+        if (cursorPos < value.length && currentMask[cursorPos] !== "_") {
+          const nextEditablePos = this.findNextEditablePosition(cursorPos, currentMask);
+          if (nextEditablePos !== -1) {
+            this.element.setSelectionRange(nextEditablePos, nextEditablePos);
+          }
+        }
+      }, 0);
+    }
+
+    getFirstEditablePosition() {
+      const firstUnderscore = this.mask.indexOf("_");
+      return firstUnderscore !== -1 ? firstUnderscore : 0;
+    }
+
+    findNextEditablePosition(startPos, mask = null) {
+      const currentMask = mask || this.mask;
+      for (let i = startPos; i < currentMask.length; i++) {
+        if (currentMask[i] === "_") {
+          return i;
+        }
+      }
+      return currentMask.lastIndexOf("_") + 1;
+    }
+
+    adjustCursor(oldValue, newValue, oldCursorPos) {
+      const digitsBeforeCursor = this.getDigits(oldValue.substring(0, oldCursorPos)).length;
+      let newCursorPos = 0;
+      let digitCount = 0;
+
+      for (let i = 0; i < newValue.length; i++) {
+        if (DIGITS.includes(newValue[i])) {
+          digitCount++;
+          if (digitCount === digitsBeforeCursor) {
+            newCursorPos = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (digitCount < digitsBeforeCursor || newCursorPos === 0) {
+        newCursorPos = newValue.length;
+      }
+
+      this.element.setSelectionRange(newCursorPos, newCursorPos);
+    }
+
+    setCursorToEnd() {
+      const length = this.element.value.length;
+      this.element.setSelectionRange(length, length);
+    }
+
+    destroy() {
+      this.element.removeEventListener("input", this.handleInput);
+      this.element.removeEventListener("keydown", this.handleKeyDown);
+      this.element.removeEventListener("focus", this.handleFocus);
+      this.element.removeEventListener("click", this.handleClick);
+      this.element.removeEventListener("paste", this.handlePaste);
+    }
+  }
+
+  const instances = new WeakMap();
+
+  return {
+    init: function (selector, mask, onInput, formats = null) {
+      const elements = typeof selector === "string" ? document.querySelectorAll(selector) : [selector];
+
+      elements.forEach((element) => {
+        const existing = instances.get(element);
+        if (existing) {
+          existing.destroy();
+        }
+
+        const instance = new PhoneInput(element, mask, onInput, formats);
+        instances.set(element, instance);
+      });
+
+      return this;
+    },
+
+    updateMask: function (selector, newMask, formats = null) {
+      const elements = typeof selector === "string" ? document.querySelectorAll(selector) : [selector];
+
+      elements.forEach((element) => {
+        const instance = instances.get(element);
+        if (instance) {
+          instance.updateMask(newMask, formats);
+        }
+      });
+
+      return this;
+    },
+
+    destroy: function (selector) {
+      const elements = typeof selector === "string" ? document.querySelectorAll(selector) : [selector];
+
+      elements.forEach((element) => {
+        const instance = instances.get(element);
+        if (instance) {
+          instance.destroy();
+          instances.delete(element);
+        }
+      });
+
+      return this;
+    },
+  };
+})();

@@ -10,6 +10,16 @@ from platformdirs import user_data_dir, user_log_dir
 APP_NAME = "JL Mantenimiento"
 ORG_NAME = "LucioTech"
 
+DEFAULT_SERVICE_CONDITIONS = (
+    "1. El cliente deberá retirar el equipo una vez notificado que se encuentra "
+    "listo para entrega y cancelar cualquier saldo pendiente.\n\n"
+    "2. La garantía comienza a partir de la fecha de entrega y aplica según las "
+    "condiciones acordadas para el servicio.\n\n"
+    "3. Si el equipo no es retirado dentro de seis (6) meses contados desde la "
+    "notificación de que está disponible, el equipo será dado de baja de los "
+    "registros del taller conforme a sus políticas y a la normativa aplicable."
+)
+
 # Tipos de equipo
 EQUIPMENT_TYPES = [
     "Laptop",

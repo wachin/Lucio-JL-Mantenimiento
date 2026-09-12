@@ -22,7 +22,7 @@
 
 ---
 
-## ✨ ¿Qué es JL Mantenimiento?
+## ¿Qué es JL Mantenimiento?
 
 **JL Mantenimiento** es una aplicación de escritorio pensada para talleres y
 centros de servicio de equipos informáticos y electrónicos. Automatiza todo el
@@ -30,12 +30,12 @@ ciclo de atención al cliente: desde que el equipo **entra** al taller hasta que
 se **entrega**, pasando por el diagnóstico, la reparación, la generación de
 presupuestos y el cobro.
 
-> 🎯 **Objetivo:** reemplazar los cuadernos, hojas de cálculo y papeles sueltos
+> **Objetivo:** reemplazar los cuadernos, hojas de cálculo y papeles sueltos
 > por un flujo digital, ordenado y profesional.
 
 ---
 
-## 🚀 Características
+## Características
 
 | Módulo | Funcionalidades |
 |---|---|
@@ -52,7 +52,7 @@ presupuestos y el cobro.
 
 ---
 
-## 🧰 Tecnologías
+## Tecnologías
 
 | Tecnología | Versión | Uso |
 |---|---|---|
@@ -69,9 +69,9 @@ presupuestos y el cobro.
 
 ---
 
-## 📦 Instalación
+## Instalación
 
-### 🐍 Entorno virtual (recomendado)
+### Entorno virtual (recomendado)
 
 Aísla las dependencias del sistema para no generar conflictos:
 
@@ -90,7 +90,7 @@ pip install -e .
 jl-mantenimiento
 ```
 
-### ▶️ Inicio rápido
+### ▶Inicio rápido
 
 ```bash
 # Linux/macOS
@@ -100,7 +100,7 @@ python3 main.py
 python main.py
 ```
 
-### 🐧 Linux (paquetes del sistema)
+### Linux (paquetes del sistema)
 
 ```bash
 sudo apt install python3-pyqt6 python3-sqlalchemy python3-platformdirs \
@@ -113,7 +113,7 @@ O usa el lanzador incluido, que configura las variables de compatibilidad de Qt:
 ./run.sh
 ```
 
-### 🪟 Windows — Guía de desarrollo
+### Windows — Guía de desarrollo
 
 Sección orientada a desarrolladores que quieran **instalar y ejecutar el
 proyecto desde cero** en Windows 10/11. Presupone que ya tienes Python (3.11+)
@@ -130,16 +130,30 @@ python -m venv venv
 Esto crea una carpeta `venv\` aislada que contiene el intérprete y los paquetes.
 Solo hay que ejecutarlo **una sola vez por proyecto**.
 
-#### 2. Activar el entorno virtual
+#### 2. Permitir scripts de PowerShell durante esta sesión
 
-```bat
-venv\Scripts\activate
+Si PowerShell informa que la ejecución de scripts está deshabilitada, ejecuta
+este comando por separado:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Este cambio solo dura mientras la ventana actual de PowerShell permanezca
+abierta.
+
+#### 3. Activar el entorno virtual
+
+Después de permitir los scripts, ejecuta este comando por separado:
+
+```powershell
+.\venv\Scripts\Activate.ps1
 ```
 
 Notarás que el prompt de la terminal cambia y aparece `(venv)`. Todo lo que
 instales o ejecutes a partir de aquí usa el Python de `venv`.
 
-#### 3. Instalar todas las dependencias
+#### 4. Instalar todas las dependencias
 
 Con el entorno activado:
 

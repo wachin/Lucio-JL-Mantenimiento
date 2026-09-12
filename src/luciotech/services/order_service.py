@@ -21,6 +21,33 @@ from luciotech.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
+ECUADOR_PROVINCES = {
+    "01": "Azuay",
+    "02": "Bolívar",
+    "03": "Cañar",
+    "04": "Carchi",
+    "05": "Cotopaxi",
+    "06": "Chimborazo",
+    "07": "El Oro",
+    "08": "Esmeraldas",
+    "09": "Guayas",
+    "10": "Imbabura",
+    "11": "Loja",
+    "12": "Los Ríos",
+    "13": "Manabí",
+    "14": "Morona Santiago",
+    "15": "Napo",
+    "16": "Pastaza",
+    "17": "Pichincha",
+    "18": "Tungurahua",
+    "19": "Zamora Chinchipe",
+    "20": "Galápagos",
+    "21": "Sucumbíos",
+    "22": "Orellana",
+    "23": "Santo Domingo de los Tsáchilas",
+    "24": "Santa Elena",
+}
+
 
 class CustomerService:
     """Servicio para gestión de clientes."""
@@ -80,6 +107,32 @@ class CustomerService:
         if not re.match(pattern, email):
             raise ValueError("El formato del correo electrónico no es válido")
 
+    @staticmethod
+    def _validate_ecuadorian_id(id_number: str) -> None:
+        """Validar una cédula ecuatoriana de 10 dígitos."""
+        if not id_number:
+            return
+        if not re.fullmatch(r"\d{10}", id_number):
+            return
+
+        if id_number[:2] not in ECUADOR_PROVINCES:
+            raise ValueError("La cédula debe tener un código de provincia válido")
+
+        total = 0
+        for position, digit in enumerate(id_number[:9]):
+            value = int(digit) * (2 if position % 2 == 0 else 1)
+            total += value - 9 if value > 9 else value
+        check_digit = (10 - total % 10) % 10
+        if check_digit != int(id_number[9]):
+            raise ValueError("El dígito verificador de la cédula no es válido")
+
+    @staticmethod
+    def get_ecuadorian_province(id_number: str) -> str | None:
+        """Obtener la provincia asociada a los dos primeros dígitos."""
+        if not re.fullmatch(r"\d{2}", id_number[:2]):
+            return None
+        return ECUADOR_PROVINCES.get(id_number[:2])
+
     def _validate_contact_fields(
         self,
         phone_primary: str,
@@ -133,7 +186,9 @@ class CustomerService:
             raise ValueError("El nombre del cliente es obligatorio")
         if not phone_primary.strip():
             raise ValueError("El teléfono principal es obligatorio")
-        if id_number.strip() and self.find_by_id_number(id_number.strip()):
+        id_number = id_number.strip()
+        self._validate_ecuadorian_id(id_number)
+        if id_number and self.find_by_id_number(id_number):
             raise ValueError("Ya existe un cliente con esa identificación")
 
         self._validate_contact_fields(
@@ -149,7 +204,7 @@ class CustomerService:
 
         customer = Customer(
             full_name=full_name.strip(),
-            id_number=id_number.strip() or None,
+            id_number=id_number or None,
             phone_primary=phone_primary.strip(),
             phone_secondary=phone_secondary.strip() or None,
             email=email.strip() or None,
@@ -172,6 +227,7 @@ class CustomerService:
             raise ValueError("El teléfono principal es obligatorio")
 
         id_number = str(kwargs.get("id_number", customer.id_number) or "").strip()
+        self._validate_ecuadorian_id(id_number)
         duplicate = self.find_by_id_number(id_number) if id_number else None
         if duplicate is not None and duplicate.id != customer.id:
             raise ValueError("Ya existe un cliente con esa identificación")
@@ -387,6 +443,8 @@ class OrderService:
         priority: str = "Normal",
         technician: str = "",
         diagnostic_cost: float = 0.0,
+        parts_cost: float = 0.0,
+        labor_cost: float = 0.0,
         advance_payment: float = 0.0,
         status: str = "Recibido",
         reported_problem: str = "",
@@ -394,7 +452,11 @@ class OrderService:
     ) -> ServiceOrder:
         """Crear una nueva orden de servicio."""
         order_number = self.generate_order_number()
-        total = diagnostic_cost
+        if parts_cost < 0 or labor_cost < 0 or advance_payment < 0:
+            raise ValueError("Los valores de repuestos, reparación y anticipo no pueden ser negativos")
+        total = parts_cost + labor_cost
+        if total == 0 and diagnostic_cost > 0:
+            total = diagnostic_cost
         balance = total - advance_payment
 
         order = ServiceOrder(
@@ -408,6 +470,8 @@ class OrderService:
             technician=technician.strip() or None,
             reported_problem=reported_problem.strip() or None,
             diagnostic_cost=diagnostic_cost,
+            parts_cost=parts_cost,
+            labor_cost=labor_cost,
             total=total,
             advance_payment=advance_payment,
             balance=balance,

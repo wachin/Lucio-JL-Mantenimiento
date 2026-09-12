@@ -124,26 +124,24 @@ class BudgetPaymentsTab(QWidget):
         self._lbl_subtotal = QLabel(format_money(0))
         summary_layout.addRow("Subtotal:", self._lbl_subtotal)
 
-        self._spn_discount = QDoubleSpinBox()
-        self._spn_discount.setRange(0, 999999)
-        self._spn_discount.setPrefix(prefix)
-        self._spn_discount.setDecimals(2)
-        self._spn_discount.setValue(0.0)
-        self._spn_discount.valueChanged.connect(self._recalculate)
-        summary_layout.addRow("Descuento:", self._spn_discount)
+        self._spn_parts = QDoubleSpinBox()
+        self._spn_parts.setRange(0, 999999)
+        self._spn_parts.setPrefix(prefix)
+        self._spn_parts.setDecimals(2)
+        self._spn_parts.valueChanged.connect(self._recalculate)
+        summary_layout.addRow("Valor de repuestos:", self._spn_parts)
 
-        self._spn_tax = QDoubleSpinBox()
-        self._spn_tax.setRange(0, 999999)
-        self._spn_tax.setPrefix(prefix)
-        self._spn_tax.setDecimals(2)
-        self._spn_tax.setValue(0.0)
-        self._spn_tax.valueChanged.connect(self._recalculate)
-        summary_layout.addRow("Impuestos:", self._spn_tax)
+        self._spn_labor = QDoubleSpinBox()
+        self._spn_labor.setRange(0, 999999)
+        self._spn_labor.setPrefix(prefix)
+        self._spn_labor.setDecimals(2)
+        self._spn_labor.valueChanged.connect(self._recalculate)
+        summary_layout.addRow("Valor de reparación:", self._spn_labor)
 
         summary_layout.addRow(HRLine())
 
         self._lbl_total = QLabel(format_money(0))
-        self._lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: #1a1a2e;")
+        self._lbl_total.setStyleSheet("font-size: 16px; font-weight: bold;")
         summary_layout.addRow("TOTAL:", self._lbl_total)
 
         self._lbl_advance = QLabel(format_money(0))
@@ -214,26 +212,8 @@ class BudgetPaymentsTab(QWidget):
                 unit_price=concept.unit_price,
             )
 
-        # Pre-fill discount from order (if already set)
-        if self._order.discount:
-            self._spn_discount.setValue(self._order.discount)
-
-        # Auto-apply tax rate from settings when tax is enabled and no
-        # tax value has been persisted on the order yet.
-        settings = SettingsService()
-        use_tax = settings.get("use_tax", "false") == "true"
-        if use_tax and not self._order.tax:
-            tax_rate = settings.get_int("tax_rate", 0)
-            if tax_rate > 0:
-                # Compute tax over the current subtotal (concepts loaded above)
-                subtotal = 0.0
-                for row in range(self._concepts_table.rowCount()):
-                    sub_widget = self._concepts_table.cellWidget(row, 4)
-                    if sub_widget and isinstance(sub_widget, QLabel):
-                        subtotal += _parse_money(sub_widget.text())
-                self._spn_tax.setValue(round(subtotal * tax_rate / 100, 2))
-        elif self._order.tax:
-            self._spn_tax.setValue(self._order.tax)
+        self._spn_parts.setValue(self._order.parts_cost or 0.0)
+        self._spn_labor.setValue(self._order.labor_cost or 0.0)
 
         # Load payments
         self._payments_table.setRowCount(0)
@@ -371,9 +351,7 @@ class BudgetPaymentsTab(QWidget):
             if sub_widget and isinstance(sub_widget, QLabel):
                 subtotal += _parse_money(sub_widget.text())
 
-        discount = self._spn_discount.value()
-        tax = self._spn_tax.value()
-        total = subtotal - discount + tax
+        total = self._spn_parts.value() + self._spn_labor.value()
 
         self._lbl_subtotal.setText(format_money(subtotal))
         self._lbl_total.setText(format_money(total))
@@ -475,12 +453,14 @@ class BudgetPaymentsTab(QWidget):
 
         concept_repo.replace_for_order(self._order.id, concepts)
 
-        discount = self._spn_discount.value()
-        tax = self._spn_tax.value()
-        total = subtotal - discount + tax
+        parts_cost = self._spn_parts.value()
+        labor_cost = self._spn_labor.value()
+        total = parts_cost + labor_cost
 
-        self._order.discount = discount
-        self._order.tax = tax
+        self._order.parts_cost = parts_cost
+        self._order.labor_cost = labor_cost
+        self._order.discount = 0.0
+        self._order.tax = 0.0
         self._order.total = total
         total_paid = PaymentRepo(session).get_total_paid(self._order.id)
         self._order.balance = total - total_paid

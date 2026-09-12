@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from luciotech.database.models import ServiceOrder
+from luciotech.database.repositories import PaymentRepo
 from luciotech.services.order_service import OrderService
 from luciotech.config import ORDER_STATUSES, PRIORITIES
 from luciotech.ui.widgets.rich_text_edit import RichTextEdit
@@ -464,13 +465,19 @@ class OrderViewDialog(QDialog):
             ))
         form.addRow("Fecha estimada:", date_estimated)
 
-        # Diagnostic cost
-        spin_cost = QDoubleSpinBox()
-        spin_cost.setRange(0, 999999.99)
-        spin_cost.setDecimals(2)
-        spin_cost.setPrefix("$")
-        spin_cost.setValue(self._order.diagnostic_cost or 0.0)
-        form.addRow("Costo de diagnóstico:", spin_cost)
+        spin_parts = QDoubleSpinBox()
+        spin_parts.setRange(0, 999999.99)
+        spin_parts.setDecimals(2)
+        spin_parts.setPrefix("$")
+        spin_parts.setValue(self._order.parts_cost or 0.0)
+        form.addRow("Valor de repuestos:", spin_parts)
+
+        spin_labor = QDoubleSpinBox()
+        spin_labor.setRange(0, 999999.99)
+        spin_labor.setDecimals(2)
+        spin_labor.setPrefix("$")
+        spin_labor.setValue(self._order.labor_cost or 0.0)
+        form.addRow("Valor de reparación:", spin_labor)
 
         # Buttons
         buttons = QDialogButtonBox(
@@ -491,7 +498,11 @@ class OrderViewDialog(QDialog):
         self._order.technician = edit_technician.text().strip() or None
         qdate = date_estimated.date()
         self._order.estimated_delivery_date = datetime(qdate.year(), qdate.month(), qdate.day())
-        self._order.diagnostic_cost = spin_cost.value()
+        self._order.parts_cost = spin_parts.value()
+        self._order.labor_cost = spin_labor.value()
+        self._order.total = self._order.parts_cost + self._order.labor_cost
+        total_paid = PaymentRepo(self._order_service.session).get_total_paid(self._order.id)
+        self._order.balance = self._order.total - total_paid
 
         # Handle status change (uses change_status for history tracking)
         if new_status != old_status:

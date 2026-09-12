@@ -37,20 +37,20 @@ def test_create_customer(setup_test_db):
     customer, warnings = service.create_customer(
         full_name="Juan Pérez",
         phone_primary="0999999999",
-        id_number="1234567890",
+        id_number="1710034065",
         email="juan@test.com",
     )
     assert customer.id is not None
     assert customer.full_name == "Juan Pérez"
-    assert customer.id_number == "1234567890"
+    assert customer.id_number == "1710034065"
 
 
 def test_search_customer(setup_test_db):
     """Prueba: búsqueda de clientes."""
     from luciotech.services.order_service import CustomerService
     service = CustomerService()
-    service.create_customer("Juan Pérez", "0999999999", "1234567890")
-    service.create_customer("María López", "0988888888", "0987654321")
+    service.create_customer("Juan Pérez", "0999999999", "1710034065")
+    service.create_customer("María López", "0988888888", "0923456784")
     # create_customer now returns (customer, warnings) but we ignore the result here
 
     results = service.search("Juan")
@@ -65,9 +65,9 @@ def test_duplicate_customer(setup_test_db):
     """Prueba: detección de duplicados por ID."""
     from luciotech.services.order_service import CustomerService
     service = CustomerService()
-    service.create_customer("Juan Pérez", "0999999999", "1234567890")
+    service.create_customer("Juan Pérez", "0999999999", "1710034065")
 
-    found = service.find_by_id_number("1234567890")
+    found = service.find_by_id_number("1710034065")
     assert found is not None
     assert found.full_name == "Juan Pérez"
 
@@ -185,6 +185,77 @@ def test_payment_and_balance(setup_test_db):
     # Recargar orden
     order = order_svc.get_by_id(order.id)
     assert order.balance == 50.0
+
+
+def test_parts_labor_total_minus_advance(setup_test_db):
+    """El total combina repuestos y reparación, descontando el anticipo."""
+    from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
+
+    customer_svc = CustomerService()
+    equip_svc = EquipmentService()
+    order_svc = OrderService()
+    customer, _ = customer_svc.create_customer("Costos", "0999999999")
+    equipment, _ = equip_svc.create_equipment(customer_id=customer.id, equipment_type="Laptop")
+
+    order = order_svc.create_order(
+        customer,
+        equipment,
+        datetime.now(),
+        parts_cost=150.0,
+        labor_cost=80.0,
+        advance_payment=50.0,
+    )
+
+    assert order.total == 230.0
+    assert order.advance_payment == 50.0
+    assert order.balance == 180.0
+
+
+def test_pdf_reports_generate(setup_test_db):
+    """Los tres reportes principales generan archivos PDF válidos."""
+    from luciotech.database.connection import get_session
+    from luciotech.database.models import BudgetConcept
+    from luciotech.reports.pdf_service import (
+        BudgetPDFService,
+        ReceiptPDFService,
+        TechnicalReportPDFService,
+    )
+    from luciotech.services.order_service import CustomerService, EquipmentService, OrderService
+
+    customer_svc = CustomerService()
+    equip_svc = EquipmentService()
+    order_svc = OrderService()
+    customer, _ = customer_svc.create_customer("PDF", "0999999999")
+    equipment, _ = equip_svc.create_equipment(customer.id, "Laptop", reported_problem="No enciende")
+    order = order_svc.create_order(
+        customer,
+        equipment,
+        datetime.now(),
+        parts_cost=40.0,
+        labor_cost=60.0,
+        advance_payment=20.0,
+        reported_problem="No enciende",
+    )
+    concept = BudgetConcept(
+        order_id=order.id,
+        concept_type="Repuesto",
+        description="Adaptador",
+        quantity=1,
+        unit_price=40.0,
+        subtotal=40.0,
+    )
+    session = get_session()
+    session.add(concept)
+    session.commit()
+
+    for generator, suffix, args in (
+        (ReceiptPDFService.generate, "receipt.pdf", ()),
+        (TechnicalReportPDFService.generate, "technical.pdf", ()),
+        (BudgetPDFService.generate, "budget.pdf", ([concept],)),
+    ):
+        path = Path(setup_test_db).parent / suffix
+        generator(order, *args, output_path=str(path))
+        assert path.read_bytes().startswith(b"%PDF")
 
 
 def test_database_persistence(setup_test_db):

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!-- saved from url=(0122)https://s0.2mdn.net/sadbundle/9510147413792031853/MARC-4112-RP-No-BC-countrycode-Phone-Spanish-728x90/index.html?ev=01_262 -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="ad.size" content="width=728, height=90">
+    <title>MARC-4112-RP-No-BC-countrycode-Phone-Spanish-728x90</title>
+    <link rel="stylesheet" href="./style.css">
+    <meta name="format-detection" content="telephone=no">
+
+    <script type="text/javascript">
+      var clickTag = "https://www.reversephone.com/lp/cf9eda/2/loading";
+      action = "javascript:window.open(window.clickTag)";
+    </script>
+  <script type="text/javascript">
+    
+  (function() {
+    var MAX_URL_PARAM_LENGTH = 34;
+    var CLICK_X_URL_KEY = 'nx';
+    var CLICK_Y_URL_KEY = 'ny';
+    var CREATIVE_DIMENSIONS_KEY = 'dim';
+    var AD_URL_PARAM = '&adurl=';
+
+    var relegateNavigation = '';
+    var urlParamMap = {};
+
+    var isNewtonTokenSet = false;
+    var isTurtleXAdClick = false;
+    var reportingIds = {};
+
+    urlParamMap[CLICK_X_URL_KEY] = null;
+    urlParamMap[CLICK_Y_URL_KEY] = null;
+    urlParamMap[CREATIVE_DIMENSIONS_KEY] = null;
+
+    var handleClickTagMessage = function(e) {
+      try {
+        var eventData = JSON.parse(e.data);
+      } catch (err) {
+        return;
+      }
+      if (eventData.isInitClickTag) {
+        if (eventData.clickTags) {
+          for (var i = 0; i < eventData.clickTags.length; i++) {
+            var clkTag = eventData.clickTags[i];
+            window[clkTag.name] = clkTag.url;
+
+            if (clkTag.eTldPlusOne) {
+              eTldPlusOnes[clkTag.url] = clkTag.eTldPlusOne;
+            }
+            if (clkTag.reportingId) {
+              reportingIds[clkTag.url] = clkTag.reportingId;
+            }
+          }
+        } else if (eventData.clickTag) {
+          window.clickTag = eventData.clickTag;
+        }
+        relegateNavigation = eventData.relegateNavigation;
+      }
+      if (isNewtonEnabled(eventData) && !isNewtonTokenSet) {
+        var newtonOt2Token = eventData.newtonOt2Token;
+        enableAttributionReportingApi(newtonOt2Token);
+      }
+      if (eventData.isTurtleXAdClick) {
+        isTurtleXAdClick = true;
+      }
+    };
+
+    var isNewtonEnabled = function(eventData) {
+      return 'newtonOt2Token' in eventData;
+    }
+
+    var enableAttributionReportingApi = function(originTrialToken) {
+      if (/Chrome/.test(window.navigator.userAgent)) {
+        var meta = document.createElement('meta');
+        meta.httpEquiv = 'origin-trial';
+        meta.content = String(originTrialToken);
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        isNewtonTokenSet = true;
+      }
+    };
+
+    var storeClickCoordinates = function(e) {
+      urlParamMap[CLICK_X_URL_KEY] = Math.round(e.clientX);
+      urlParamMap[CLICK_Y_URL_KEY] = Math.round(e.clientY);
+    };
+
+    var getCreativeDimensions = function() {
+      return window.innerWidth + 'x' + window.innerHeight;
+    }
+
+    var getExitClickParams = function(e) {
+      urlParamMap[CREATIVE_DIMENSIONS_KEY] = getCreativeDimensions();
+
+      var exitParams = '';
+      for (var key in urlParamMap) {
+        exitParams += '&' + key + '=';
+        if (urlParamMap[key] !== null) {
+          exitParams += urlParamMap[key];
+        }
+      }
+      return exitParams;
+    }
+
+    var appendExitClickParams = function(url) {
+      var adUrlIndex = url.toLowerCase().indexOf(AD_URL_PARAM);
+      var paramsToBeAdded = getExitClickParams();
+      if (adUrlIndex > -1 && paramsToBeAdded.length <= MAX_URL_PARAM_LENGTH) {
+        url = url.substr(0, adUrlIndex) + paramsToBeAdded +
+          url.substr(adUrlIndex);
+      };
+      return url;
+    };
+
+    if (open.call) {
+      window.open = function(open) {
+        return function(url, name, features) {
+          if (isTurtleXAdClick && !!reportingIds[url]) {
+            var message = {
+              'reportingId': reportingIds[url],
+              'clickX': urlParamMap[CLICK_X_URL_KEY],
+              'clickY': urlParamMap[CLICK_Y_URL_KEY],
+              'creativeDims': getCreativeDimensions()
+              };
+            parent.postMessage(JSON.stringify(message), '*');
+          }
+          url = appendExitClickParams(url);
+          if (relegateNavigation === 'parent') {
+            var message = {'clickTag': url, 'isPostClickTag': true};
+            parent.postMessage(JSON.stringify(message), '*');
+          } else {
+            var args = [url, name];
+            var windowFeatures = '';
+
+            if (features) {
+              windowFeatures = windowFeatures.concat(features);
+            }
+            if (isNewtonTokenSet &&
+                !!document.featurePolicy?.allowedFeatures().includes(
+                  'attribution-reporting')) {
+              if (features) {
+                if (!features.includes('attributionsrc')) {
+                  windowFeatures = windowFeatures.concat(features, ', attributionsrc');
+                }
+              } else {
+                windowFeatures = windowFeatures.concat('attributionsrc');
+              }
+            }
+
+            if (windowFeatures) {
+              args.push(windowFeatures);
+            }
+            open.apply(window,args);
+          }
+        };
+      }(window.open);
+    }
+
+    if (window.addEventListener) {
+      window.addEventListener(
+          'message', handleClickTagMessage, false);
+      window.addEventListener('mousedown', storeClickCoordinates, true);
+    } else {
+      window.attachEvent('onmessage', handleClickTagMessage);
+    }
+  })();
+    
+  </script></head>
+
+  <body>
+    <div id="banner">
+      <div id="ad">
+        <div class="flex-row">
+          <div class="col-flex">
+            <div class="headline">¿Quién Me Llamó Desde Este Número de Teléfono?</div>
+
+            <form method="get" action="javascript:void(window.open(window.clickTag))" onsubmit="return validate_form(this);">
+              <div class="text_wrapper">
+                <label class="text-label">Número de teléfono</label>
+
+                <select id="country-code-select" class="phone_code_select" name="phone_code" required=""><option value="argentina" data-country-id="argentina">🇦🇷 +54</option><option value="canada" data-country-id="canada">🇨🇦 +1</option><option value="chile" data-country-id="chile">🇨🇱 +56</option><option value="colombia" data-country-id="colombia">🇨🇴 +57</option><option value="dominicanRepublic" data-country-id="dominicanRepublic">🇩🇴 +1</option><option value="ecuador" data-country-id="ecuador">🇪🇨 +593</option><option value="georgia" data-country-id="georgia">🇬🇪 +995</option><option value="india" data-country-id="india">🇮🇳 +91</option><option value="indonesia" data-country-id="indonesia">🇮🇩 +62</option><option value="israel" data-country-id="israel">🇮🇱 +972</option><option value="kazakhstan" data-country-id="kazakhstan">🇰🇿 +7</option><option value="kuwait" data-country-id="kuwait">🇰🇼 +965</option><option value="malaysia" data-country-id="malaysia">🇲🇾 +60</option><option value="maldives" data-country-id="maldives">🇲🇻 +960</option><option value="mexico" data-country-id="mexico">🇲🇽 +52</option><option value="namibia" data-country-id="namibia">🇳🇦 +264</option><option value="paraguay" data-country-id="paraguay">🇵🇾 +595</option><option value="peru" data-country-id="peru">🇵🇪 +51</option><option value="philippines" data-country-id="philippines">🇵🇭 +63</option><option value="singapore" data-country-id="singapore">🇸🇬 +65</option><option value="southAfrica" data-country-id="southAfrica">🇿🇦 +27</option><option value="thailand" data-country-id="thailand">🇹🇭 +66</option><option value="turkey" data-country-id="turkey">🇹🇷 +90</option><option value="uruguay" data-country-id="uruguay">🇺🇾 +598</option></select>
+
+                <input type="tel" inputmode="numeric" class="text_input" id="phone-number" name="phone" mask="(___) ___ - ____" placeholder="_ __ ____ ____">
+              </div>
+              <button id="clickthrough-button" type="submit" class="button clickthrough">Buscar Ahora</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <!--END ad-->
+    </div>
+    <!--END banner-->
+    <script type="application/javascript" src="./phoneformat.js.descargar"></script>
+    <script src="./script.js.descargar"></script>
+    <script type="text/javascript">
+      // Initialize phone formatter
+      const phoneInput = document.getElementById("phone-number");
+      const selectElement = document.getElementById("country-code-select");
+
+      // Initialize with first country's formats (all formats, not just first)
+      if (COUNTRY_PHONE_FORMATS.length > 0) {
+        const initialCountry = COUNTRY_PHONE_FORMATS[0];
+        const initialMask = initialCountry.formats[0];
+
+        PhoneFormatter.init(
+          phoneInput,
+          initialMask,
+          (event, tag) => {
+            tag.setCustomValidity("");
+          },
+          initialCountry.formats,
+        );
+
+        phoneInput.setAttribute("placeholder", initialMask);
+      }
+
+      // Listen for country change to update mask
+      selectElement.addEventListener("change", function () {
+        const selectedCode = this.value;
+        const country = COUNTRY_PHONE_FORMATS.find((c) => c.id === selectedCode);
+
+        if (country && country.formats && country.formats.length > 0) {
+          const newMask = country.formats[0];
+
+          // Update the mask dynamically with all available formats
+          PhoneFormatter.updateMask(phoneInput, newMask, country.formats);
+          phoneInput.setAttribute("placeholder", newMask);
+          phoneInput.focus();
+        }
+      });
+    </script>
+  
+
+</body></html>

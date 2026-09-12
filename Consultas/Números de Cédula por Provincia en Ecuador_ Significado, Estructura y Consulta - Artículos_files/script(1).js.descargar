@@ -1,0 +1,395 @@
+selected = false;
+
+const COUNTRY_PHONE_FORMATS = [
+  {
+    id: "argentina",
+    label: "Argentina",
+    label_es: "Argentina",
+    iso: "AR",
+    code: "+54",
+    emoji: "🇦🇷",
+    formats: ["_ __ ____ ____", "__ ____ ____"],
+    headline: {
+      en: "Argentinian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Argentinos",
+    },
+  },
+  {
+    id: "canada",
+    label: "Canada",
+    label_es: "Canadá",
+    iso: "CA",
+    code: "+1",
+    emoji: "🇨🇦",
+    formats: ["___ ___ ____"],
+    headline: {
+      en: "Canadian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Canadienses",
+    },
+  },
+  {
+    id: "chile",
+    label: "Chile",
+    label_es: "Chile",
+    iso: "CL",
+    code: "+56",
+    emoji: "🇨🇱",
+    formats: ["_ ____ ____"],
+    headline: {
+      en: "Chilean Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Chilenos",
+    },
+  },
+  {
+    id: "colombia",
+    label: "Colombia",
+    label_es: "Colombia",
+    iso: "CO",
+    code: "+57",
+    emoji: "🇨🇴",
+    formats: ["___ ___ ____", "_ ___ ____"],
+    headline: {
+      en: "Colombian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Colombianos",
+    },
+  },
+  {
+    id: "dominicanRepublic",
+    label: "Dominican Republic",
+    label_es: "República Dominicana",
+    iso: "DO",
+    code: "+1",
+    emoji: "🇩🇴",
+    formats: ["___ ___ ____"],
+    headline: {
+      en: "Dominican Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Dominicanos",
+    },
+  },
+  {
+    id: "ecuador",
+    label: "Ecuador",
+    label_es: "Ecuador",
+    iso: "EC",
+    code: "+593",
+    emoji: "🇪🇨",
+    formats: ["__ ___ ____", "___ ___ ____"],
+    headline: {
+      en: "Ecuadorian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Ecuatorianos",
+    },
+  },
+  {
+    id: "georgia",
+    label: "Georgia",
+    label_es: "Georgia",
+    iso: "GE",
+    code: "+995",
+    emoji: "🇬🇪",
+    formats: ["___ ___ ___"],
+    headline: {
+      en: "Georgian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Georgianos",
+    },
+  },
+  {
+    id: "india",
+    label: "India",
+    label_es: "India",
+    iso: "IN",
+    code: "+91",
+    emoji: "🇮🇳",
+    formats: ["____ _____"],
+    headline: {
+      en: "Indian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de India",
+    },
+  },
+  {
+    id: "indonesia",
+    label: "Indonesia",
+    label_es: "Indonesia",
+    iso: "ID",
+    code: "+62",
+    emoji: "🇮🇩",
+    formats: ["____ ____ ____", "___ ____ ____", "___ ___ ____", "__ ___ ____"],
+    headline: {
+      en: "Indonesian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Indonesia",
+    },
+  },
+  {
+    id: "israel",
+    label: "Israel",
+    label_es: "Israel",
+    iso: "IL",
+    code: "+972",
+    emoji: "🇮🇱",
+    formats: ["__ ___ ____", "_ ___ ____"],
+    headline: {
+      en: "Israeli Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Israelíes",
+    },
+  },
+  {
+    id: "kazakhstan",
+    label: "Kazakhstan",
+    label_es: "Kazajistán",
+    iso: "KZ",
+    code: "+7",
+    emoji: "🇰🇿",
+    formats: ["___ ___ __ __"],
+    headline: {
+      en: "Kazakh Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Kazajistán",
+    },
+  },
+  {
+    id: "kuwait",
+    label: "Kuwait",
+    label_es: "Kuwait",
+    iso: "KW",
+    code: "+965",
+    emoji: "🇰🇼",
+    formats: ["____ ____"],
+    headline: {
+      en: "Kuwaiti Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Kuwait",
+    },
+  },
+  {
+    id: "malaysia",
+    label: "Malaysia",
+    label_es: "Malasia",
+    iso: "MY",
+    code: "+60",
+    emoji: "🇲🇾",
+    formats: ["__ ____ ____", "___ ____ ____"],
+    headline: {
+      en: "Malaysian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Malasia",
+    },
+  },
+  {
+    id: "maldives",
+    label: "Maldives",
+    label_es: "Maldivas",
+    iso: "MV",
+    code: "+960",
+    emoji: "🇲🇻",
+    formats: ["___ ____"],
+    headline: {
+      en: "Maldivian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Maldivas",
+    },
+  },
+  {
+    id: "mexico",
+    label: "Mexico",
+    label_es: "México",
+    iso: "MX",
+    code: "+52",
+    emoji: "🇲🇽",
+    formats: ["__ ____ ____", "_ __ ____ ____"],
+    headline: {
+      en: "Mexican Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Mexicanos",
+    },
+  },
+  {
+    id: "namibia",
+    label: "Namibia",
+    label_es: "Namibia",
+    iso: "NA",
+    code: "+264",
+    emoji: "🇳🇦",
+    formats: ["__ ___ ____"],
+    headline: {
+      en: "Namibian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Namibia",
+    },
+  },
+  {
+    id: "paraguay",
+    label: "Paraguay",
+    label_es: "Paraguay",
+    iso: "PY",
+    code: "+595",
+    emoji: "🇵🇾",
+    formats: ["___ ___ ___", "___ _____"],
+    headline: {
+      en: "Paraguayan Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Paraguayos",
+    },
+  },
+  {
+    id: "peru",
+    label: "Peru",
+    label_es: "Perú",
+    iso: "PE",
+    code: "+51",
+    emoji: "🇵🇪",
+    formats: ["__ _______", "___ ___ __ __"],
+    headline: {
+      en: "Peruvian Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Peruanos",
+    },
+  },
+  {
+    id: "philippines",
+    label: "Philippines",
+    label_es: "Filipinas",
+    iso: "PH",
+    code: "+63",
+    emoji: "🇵🇭",
+    formats: ["___ ___ ____", "__ ___ ____", "_ ___ ____", "___ ____"],
+    headline: {
+      en: "Philippine Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Filipinas",
+    },
+  },
+  {
+    id: "singapore",
+    label: "Singapore",
+    label_es: "Singapur",
+    iso: "SG",
+    code: "+65",
+    emoji: "🇸🇬",
+    formats: ["____ ____"],
+    headline: {
+      en: "Singaporean Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Singapur",
+    },
+  },
+  {
+    id: "southAfrica",
+    label: "South Africa",
+    label_es: "Sudáfrica",
+    iso: "ZA",
+    code: "+27",
+    emoji: "🇿🇦",
+    formats: ["__ ___ ____"],
+    headline: {
+      en: "South African Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono de Sudáfrica",
+    },
+  },
+  {
+    id: "thailand",
+    label: "Thailand",
+    label_es: "Tailandia",
+    iso: "TH",
+    code: "+66",
+    emoji: "🇹🇭",
+    formats: ["__ ___ ____", "_ __ ____"],
+    headline: {
+      en: "Thai Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Tailandeses",
+    },
+  },
+  {
+    id: "turkey",
+    label: "Turkey",
+    label_es: "Pava",
+    iso: "TR",
+    code: "+90",
+    emoji: "🇹🇷",
+    formats: ["___ ___ ____"],
+    headline: {
+      en: "Turkish Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Turcos",
+    },
+  },
+  // {
+  //   id: "unitedStates",
+  //   label: "United States",
+  //   label_es: "Estados Unidos",
+  //   iso: "US",
+  //   code: "+1",
+  //   formats: ["(___) ___ - ____"],
+  //   headline: {
+  //     en: "Reverse Phone Lookup",
+  //     es: "Búsqueda inversa de teléfono",
+  //   },
+  // },
+  {
+    id: "uruguay",
+    label: "Uruguay",
+    label_es: "Uruguay",
+    iso: "UY",
+    code: "+598",
+    emoji: "🇺🇾",
+    formats: ["____ ____"],
+    headline: {
+      en: "Uruguayan Phone Number Lookup",
+      es: "Búsqueda de Números de Teléfono Uruguayos",
+    },
+  },
+];
+
+function startAd() {
+  adDiv = document.getElementById("ad");
+
+  const selectElement = document.getElementById("country-code-select");
+  COUNTRY_PHONE_FORMATS.forEach((country) => {
+    const option = document.createElement("option");
+    option.value = country.id;
+    option.setAttribute("data-country-id", country.id);
+    option.text = `${country.emoji} ${country.code}`;
+    selectElement.appendChild(option);
+  });
+}
+
+function clickPropogationFn(e) {
+  const input = e.currentTarget;
+  // input.style.border = "#80bdff 2px solid";
+  // input.style.boxShadow = "none";
+  if (!selected) {
+    setTimeout(() => {
+      selected = true;
+    }, 0);
+  }
+  e = e || window.event;
+  e.stopPropagation();
+}
+
+document.getElementById("phone-number").addEventListener("click", clickPropogationFn);
+document.getElementById("phone-number").addEventListener("focus", function (e) {
+  if (!selected) {
+    setTimeout(() => {
+      selected = true;
+    }, 0);
+  }
+  e = e || window.event;
+  e.stopPropagation();
+});
+
+document.getElementById("clickthrough-button").addEventListener("click", function (e) {
+  e = e || window.event;
+  e.stopPropagation();
+});
+
+function removeNonLatinChars(str) {
+  const text = `${str || ""}`.trim();
+  return text.replace(/[^\u0020-\u007e\u00a0-\u00ff]/g, "");
+}
+
+function validate_form(form) {
+  const phone = removeNonLatinChars(form.phone.value)?.replaceAll(" ", "");
+
+  const countryId = form.phone_code.value;
+  const country = COUNTRY_PHONE_FORMATS.find((c) => c.id === countryId)?.code || "";
+
+  // if (phone.replace(/\D/g, "").length === 0) {
+  //   form.phone.setCustomValidity("Enter Valid Phone Number");
+  //   form.phone.reportValidity(); // This will trigger the error message
+  //   return false;
+  // }
+
+  const encodedPhone = encodeURIComponent(window.btoa(phone.length > 0 ? country + phone : ""));
+  var qpSep = window.clickTag.indexOf("?") !== -1 ? "&" : "?";
+  var newUrl = qpSep + "phone=" + encodedPhone + "&countryName=" + encodeURIComponent(countryId);
+  window.clickTag += newUrl;
+}
+
+startAd();
