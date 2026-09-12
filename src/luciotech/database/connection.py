@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 from luciotech.config import get_db_path
 
@@ -24,7 +25,9 @@ def get_engine() -> Engine:
         db_path = get_db_path()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         url = f"sqlite:///{db_path}"
-        _engine = create_engine(url, echo=False)
+        # SQLite es una base local de escritorio; no necesita un pool de
+        # conexiones compartidas y así una sesión olvidada no agota el pool.
+        _engine = create_engine(url, echo=False, poolclass=NullPool)
 
         @event.listens_for(_engine, "connect")
         def set_sqlite_pragma(dbapi_connection, _connection_record):

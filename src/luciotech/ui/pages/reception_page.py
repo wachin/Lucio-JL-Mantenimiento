@@ -128,6 +128,8 @@ class ReceptionPage(QWidget):
         # Campos adicionales del cliente
         form_layout = QFormLayout()
         self._cust_id = QLineEdit()
+        self._cust_province = QLabel("Provincia: —")
+        self._cust_id.textChanged.connect(self._update_customer_province)
         self._cust_phone = QLineEdit()
         self._cust_phone2 = QLineEdit()
         self._cust_email = QLineEdit()
@@ -135,6 +137,7 @@ class ReceptionPage(QWidget):
         self._cust_notes = QLineEdit()
 
         form_layout.addRow("Identificación:", self._cust_id)
+        form_layout.addRow("", self._cust_province)
         form_layout.addRow("Teléfono principal:", self._cust_phone)
         form_layout.addRow("Teléfono secundario:", self._cust_phone2)
         form_layout.addRow("Correo electrónico:", self._cust_email)
@@ -335,6 +338,10 @@ class ReceptionPage(QWidget):
         self._cust_address.setText(customer.address or "")
         self._cust_notes.setText(customer.notes or "")
         self._load_recent_orders(customer)
+
+    def _update_customer_province(self, id_number: str) -> None:
+        province = self._customer_service.get_ecuadorian_province(id_number.strip())
+        self._cust_province.setText(f"Provincia: {province or '—'}")
 
     def _load_recent_orders(self, customer: Customer) -> None:
         """Cargar y mostrar las órdenes recientes del cliente seleccionado."""

@@ -1,0 +1,45 @@
+// [AUD-22ago T7.1] Extraído de validar-cedula.html conservando posición y ejecución síncrona.
+let creditsToken=localStorage.getItem("cec_token")||null;
+let creditsLeft=parseInt(localStorage.getItem("cec_credits")||"0",10);
+function saveCredits(){localStorage.setItem("cec_token",creditsToken||"");localStorage.setItem("cec_credits",String(creditsLeft))}
+async function ensureToken(){if(!creditsToken){try{const r=await fetch("/init");const d=await r.json();creditsToken=d.token;creditsLeft=d.credits;saveCredits()}catch(e){}}}
+async function api(path){await ensureToken();const h={"X-Credits-Token":creditsToken||""};const r=await fetch(path,{headers:h});const j=await r.json();const rem=r.headers.get("X-Credits-Remaining");if(rem!==null){creditsLeft=parseInt(rem,10);saveCredits()}if(!r.ok)throw{status:r.status,data:j};return j}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function escA(s){return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
+function card(i,n,t,f){return'<div class="result-card"><div class="result-card-header"><span class="rch-icon">'+i+'</span><span class="rch-name">'+esc(n)+'</span><span class="rch-tag">'+t+'</span></div><div class="result-fields">'+f+'</div><div class="source-tag">\u{1f3db}\ufe0f Fuente: bases de datos públicas de Ecuador <span>\u2713 Fuentes públicas</span></div></div>'}
+function row(i,l,v,m,c){const cls=m?"field-value mono":"field-value";const b=(c||m)?'<button class="copy-mini" data-act="copy" data-val="'+escA(v)+'" data-aud="AUD-22ago-T7.2">Copiar</button>':"";return'<div class="field-row"><span class="field-icon">'+i+'</span><div class="field-content"><div class="field-label">'+esc(l)+'</div><div class="'+cls+'">'+esc(v)+'</div></div>'+b+'</div>'}
+function copyText(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent="\u2713";setTimeout(()=>b.textContent=o,1800);showToast("Copiado")}).catch(()=>showToast("Copiado"))}
+function showSkeleton(d,r){d.innerHTML='<div class="skeleton-card"><div class="skeleton-header"></div>'+Array(r||4).fill('<div class="skeleton-row"></div>').join("")+"</div>"}
+function showError(d,m){d.innerHTML='<div class="error-box">\u2715 '+esc(m)+'</div>'}
+function handleErr(e,d){if(e.status===402){d.innerHTML='<div class="paywall" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:28px;text-align:center"><div style="font-size:2rem;margin-bottom:10px">\ud83d\udd12</div><h3 style="font-size:1rem;font-weight:800;margin-bottom:8px">Desbloquea el resultado completo</h3><p style="font-size:0.8rem;color:var(--text2);margin-bottom:16px">Compra cr\u00e9ditos desde <strong>$0.05/consulta</strong></p><div style="display:flex;flex-direction:column;gap:8px"><button class="pay-btn" data-act="buy" data-pkg="20" data-aud="AUD-22ago-T7.2"><span class="pay-btn-price">$1.00</span><span class="pay-btn-label">20 consultas</span></button><button class="pay-btn primary" data-act="buy" data-pkg="60" data-aud="AUD-22ago-T7.2"><span class="pay-btn-price">$2.50</span><span class="pay-btn-label">60 consultas</span></button><button class="pay-btn" data-act="buy" data-pkg="150" data-aud="AUD-22ago-T7.2"><span class="pay-btn-price">$5.00</span><span class="pay-btn-label">150 consultas</span></button></div></div>';return}const m=e.data&&e.data.detail?(typeof e.data.detail==="string"?e.data.detail:"No se encontraron resultados."):"Error de conexi\u00f3n.";showError(d,m)}
+let _checkoutPending=false;async function buyCredits(p, _srcEl) {if(_checkoutPending)return;_checkoutPending=true;const b=_srcEl||(window.event&&window.event.currentTarget&&window.event.currentTarget!==document?window.event.currentTarget:null),o=b?b.innerHTML:"";if(b){b.disabled=true;b.textContent="Abriendo pago…"}try{await ensureToken();const r=await fetch("/pago/sesion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({package:p,token:creditsToken||""})});const d=await r.json();if(!r.ok||!d.url)throw new Error(d.detail||"Error al iniciar pago.");(window.dataLayer=window.dataLayer||[]).push({event:"checkout_created",flow_id:"",tipo:"",estado:"ok",paquete:String(p)});location.href=d.url}catch(e){_checkoutPending=false;if(b){b.disabled=false;b.innerHTML=o}(window.dataLayer=window.dataLayer||[]).push({event:"checkout_error",flow_id:"",tipo:"",estado:"error",paquete:String(p)});showToast(e.message||"Error al iniciar pago.")}} // [AUD-22ago T4.3]
+function validarCedula(c){if(!/^\d{10}$/.test(c))return false;const p=parseInt(c.slice(0,2));if(p<1||p>24)return false;const d=c.split("").map(Number);const co=[2,1,2,1,2,1,2,1,2];let s=0;for(let i=0;i<9;i++){let v=d[i]*co[i];if(v>=10)v-=9;s+=v}const ch=s%10===0?0:10-(s%10);return ch===d[9]}
+function validarRUC(r){if(!/^\d{13}$/.test(r))return false;const p=parseInt(r.slice(0,2));if(p<1||p>24)return false;const t=parseInt(r[2]);if(t<6)return r.slice(10)==="001"&&validarCedula(r.slice(0,10));if(t===6)return r.slice(9)==="0001";if(t===9)return r.slice(10)==="001";return false}
+function validarPlaca(p){return/^[A-Za-z]{2,3}-?\d{3,4}$/.test(p)}
+function normalizarPlaca(p){const s=p.replace(/-/g,"");const m=s.match(/^([A-Z]{2,3})(\d{3,4})$/);return m?m[1]+"-"+m[2]:p}
+function quitarTildes(s){return s.normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+let toastTimer;function showToast(m){const t=document.getElementById("cec-toast");t.textContent=m;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),3000)}
+function toggleFaq(el){const a=el.nextElementSibling;const ch=el.querySelector(".chevron");a.classList.toggle("open");ch.style.transform=a.classList.contains("open")?"rotate(180deg)":""}
+function validar(){const i=document.getElementById("q").value.trim();const d=document.getElementById("res");if(!i||i.length!==10){d.innerHTML='<div class="validation-box">\u26a0\ufe0f Ingresa exactamente 10 d\u00edgitos.</div>';return}if(validarCedula(i)){d.innerHTML='<div style="padding:16px;border-radius:10px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);text-align:center"><div style="font-size:1.5rem;margin-bottom:6px">\u2705</div><div style="font-weight:700;color:#22c55e;font-size:0.92rem;margin-bottom:8px">C\u00e9dula v\u00e1lida</div><div style="font-size:0.75rem;color:var(--text2)">El n\u00famero '+esc(i)+' tiene formato correcto (provincia '+i.slice(0,2)+')</div><div style="margin-top:12px"><a href="/consultar-cedula" style="color:var(--primary);font-size:0.78rem;font-weight:600;text-decoration:none">Consultar datos completos \u2192</a></div></div>'}else{d.innerHTML='<div style="padding:16px;border-radius:10px;background:rgba(255,87,87,0.1);border:1px solid rgba(255,87,87,0.3);text-align:center"><div style="font-size:1.5rem;margin-bottom:6px">\u274c</div><div style="font-weight:700;color:#FF5757;font-size:0.92rem;margin-bottom:4px">C\u00e9dula inv\u00e1lida</div><div style="font-size:0.75rem;color:var(--text2)">El n\u00famero '+esc(i)+' no cumple con el algoritmo de verificaci\u00f3n.</div></div>'}}
+ensureToken();
+
+// [AUD-22ago T7.2] Delegación única de keydown; cubre también nodos dinámicos.
+document.addEventListener('keydown', function (ev) {
+  const el = ev.target.closest('[data-keydown-act]'); if (!el) return;
+  switch (el.dataset.keydownAct) {    case 'if-1': if(ev.key==='Enter')validar(); break;  }
+});
+
+// [AUD-22ago T7.2] Delegación única de input; cubre también nodos dinámicos.
+document.addEventListener('input', function (ev) {
+  const el = ev.target.closest('[data-input-act]'); if (!el) return;
+  switch (el.dataset.inputAct) {    case 'this-1': el.value=el.value.replace(/[^0-9]/g,''); break;  }
+});
+
+// [AUD-22ago T7.2] Delegación única de click; cubre también nodos dinámicos.
+document.addEventListener('click', function (ev) {
+  const el = ev.target.closest('[data-act]'); if (!el) return;
+  switch (el.dataset.act) {    case 'validar-1': validar(); break;    case 'togglefaq-1': toggleFaq(el); break;    case 'buy': buyCredits(el.dataset.pkg, el); break;  // [AUD-22ago T7.6] pasar el botón real
+    case 'copy': copyText(el.dataset.val, el); break;
+    case 'select-result': sp2(el.dataset.id); break;
+  }
+});

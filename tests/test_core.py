@@ -37,20 +37,20 @@ def test_create_customer(setup_test_db):
     customer, warnings = service.create_customer(
         full_name="Juan Pérez",
         phone_primary="0999999999",
-        id_number="1234567890",
+        id_number="1710034065",
         email="juan@test.com",
     )
     assert customer.id is not None
     assert customer.full_name == "Juan Pérez"
-    assert customer.id_number == "1234567890"
+    assert customer.id_number == "1710034065"
 
 
 def test_search_customer(setup_test_db):
     """Prueba: búsqueda de clientes."""
     from luciotech.services.order_service import CustomerService
     service = CustomerService()
-    service.create_customer("Juan Pérez", "0999999999", "1234567890")
-    service.create_customer("María López", "0988888888", "0987654321")
+    service.create_customer("Juan Pérez", "0999999999", "1710034065")
+    service.create_customer("María López", "0988888888", "0923456784")
     # create_customer now returns (customer, warnings) but we ignore the result here
 
     results = service.search("Juan")
@@ -65,9 +65,9 @@ def test_duplicate_customer(setup_test_db):
     """Prueba: detección de duplicados por ID."""
     from luciotech.services.order_service import CustomerService
     service = CustomerService()
-    service.create_customer("Juan Pérez", "0999999999", "1234567890")
+    service.create_customer("Juan Pérez", "0999999999", "1710034065")
 
-    found = service.find_by_id_number("1234567890")
+    found = service.find_by_id_number("1710034065")
     assert found is not None
     assert found.full_name == "Juan Pérez"
 

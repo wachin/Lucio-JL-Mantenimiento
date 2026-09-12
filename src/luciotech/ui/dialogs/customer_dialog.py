@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QCloseEvent
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -77,6 +77,8 @@ class CustomerSelectDialog(QDialog):
         form_layout = QFormLayout(form_widget)
         self._name_input = QLineEdit()
         self._id_input = QLineEdit()
+        self._province_label = QLabel("Provincia: —")
+        self._id_input.textChanged.connect(self._update_province)
         self._phone_input = QLineEdit()
         self._phone2_input = QLineEdit()
         self._email_input = QLineEdit()
@@ -85,6 +87,7 @@ class CustomerSelectDialog(QDialog):
 
         form_layout.addRow("Nombre completo *:", self._name_input)
         form_layout.addRow("Cédula/RUC/ID:", self._id_input)
+        form_layout.addRow("", self._province_label)
         form_layout.addRow("Teléfono principal *:", self._phone_input)
         form_layout.addRow("Teléfono secundario:", self._phone2_input)
         form_layout.addRow("Correo electrónico:", self._email_input)
@@ -154,6 +157,10 @@ class CustomerSelectDialog(QDialog):
         self._email_input.clear()
         self._address_input.clear()
         self._notes_input.clear()
+
+    def _update_province(self, id_number: str) -> None:
+        province = self._service.get_ecuadorian_province(id_number.strip())
+        self._province_label.setText(f"Provincia: {province or '—'}")
 
     def _get_form_data(self) -> dict:
         return {
@@ -254,3 +261,16 @@ class CustomerSelectDialog(QDialog):
 
     def get_selected_customer(self) -> Customer | None:
         return self._selected_customer
+
+    def _close_session(self) -> None:
+        session = self._service.repo.session
+        if session is not None:
+            session.close()
+
+    def done(self, result: int) -> None:
+        self._close_session()
+        super().done(result)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._close_session()
+        super().closeEvent(event)

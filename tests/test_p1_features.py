@@ -83,6 +83,38 @@ class TestPhoneValidation:
             svc.create_customer("No Phone", "")
 
 
+class TestEcuadorianIdValidation:
+    """Validación del dígito verificador de cédulas ecuatorianas."""
+
+    def test_valid_id(self, setup_test_db):
+        from luciotech.services.order_service import CustomerService
+        svc = CustomerService()
+        customer, _ = svc.create_customer("Cédula válida", "0999999999", "1710034065")
+        assert customer.id_number == "1710034065"
+
+    def test_invalid_check_digit(self, setup_test_db):
+        from luciotech.services.order_service import CustomerService
+        svc = CustomerService()
+        with pytest.raises(ValueError, match="dígito verificador"):
+            svc.create_customer("Cédula inválida", "0999999999", "1710034066")
+
+    def test_invalid_province(self, setup_test_db):
+        from luciotech.services.order_service import CustomerService
+        svc = CustomerService()
+        with pytest.raises(ValueError, match="provincia"):
+            svc.create_customer("Cédula inválida", "0999999999", "0010034065")
+
+    def test_third_digit_is_not_restricted(self, setup_test_db):
+        from luciotech.services.order_service import CustomerService
+        svc = CustomerService()
+        customer, _ = svc.create_customer("Cédula válida", "0999999999", "1760000008")
+        assert customer.id_number == "1760000008"
+
+    def test_province_from_first_two_digits(self, setup_test_db):
+        from luciotech.services.order_service import CustomerService
+        assert CustomerService.get_ecuadorian_province("1710034065") == "Pichincha"
+
+
 # ── Validación de correo ─────────────────────────────────────────────
 
 

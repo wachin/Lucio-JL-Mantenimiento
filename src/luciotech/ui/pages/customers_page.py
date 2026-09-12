@@ -88,11 +88,12 @@ class CustomersPage(QWidget):
         layout.addLayout(actions)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(8)
+        self._table.setColumnCount(9)
         self._table.setHorizontalHeaderLabels(
             [
                 "Nombre",
                 "Identificación",
+            "Provincia",
                 "Teléfono",
                 "Teléfono alterno",
                 "Correo",
@@ -112,8 +113,8 @@ class CustomersPage(QWidget):
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._table)
 
         self._count_label = QLabel()
@@ -160,18 +161,20 @@ class CustomersPage(QWidget):
             name_item.setData(Qt.ItemDataRole.UserRole, customer)
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, QTableWidgetItem(customer.id_number or ""))
-            self._table.setItem(row, 2, QTableWidgetItem(customer.phone_primary))
-            self._table.setItem(row, 3, QTableWidgetItem(customer.phone_secondary or ""))
-            self._table.setItem(row, 4, QTableWidgetItem(customer.email or ""))
-            self._table.setItem(row, 5, QTableWidgetItem(customer.address or ""))
-            self._table.setItem(row, 6, QTableWidgetItem(str(len(customer.equipments))))
+            province = self._service.get_ecuadorian_province(customer.id_number or "")
+            self._table.setItem(row, 2, QTableWidgetItem(province or "—"))
+            self._table.setItem(row, 3, QTableWidgetItem(customer.phone_primary))
+            self._table.setItem(row, 4, QTableWidgetItem(customer.phone_secondary or ""))
+            self._table.setItem(row, 5, QTableWidgetItem(customer.email or ""))
+            self._table.setItem(row, 6, QTableWidgetItem(customer.address or ""))
+            self._table.setItem(row, 7, QTableWidgetItem(str(len(customer.equipments))))
             if self._showing_deleted and customer.deleted_at:
                 date_str = customer.deleted_at.strftime("%Y-%m-%d")
             elif customer.created_at:
                 date_str = customer.created_at.strftime("%Y-%m-%d")
             else:
                 date_str = ""
-            self._table.setItem(row, 7, QTableWidgetItem(date_str))
+            self._table.setItem(row, 8, QTableWidgetItem(date_str))
 
             # Marcar visualmente las filas eliminadas
             if self._showing_deleted:

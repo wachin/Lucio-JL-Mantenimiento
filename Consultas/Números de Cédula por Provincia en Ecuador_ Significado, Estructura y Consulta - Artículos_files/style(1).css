@@ -1,0 +1,159 @@
+body {
+  margin: 0px;
+}
+#banner {
+  position: relative;
+  display: block;
+  width: 928px;
+  height: 178px;
+  background: #ffffff;
+  overflow: hidden;
+  border: #d9d9d9 1px solid;
+}
+
+#ad {
+  display: flex;
+  overflow: hidden;
+  width: 928px;
+  height: 178px;
+  background: url(../images/logo-reversephone.png) 384px 153px no-repeat;
+  background-size: 130px 14px;
+  -moz-user-select: -moz-none;
+  -khtml-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.headline {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 32px;
+  text-align: center;
+  font-weight: bold;
+  line-height: 53px;
+  color: #252767;
+
+  margin-top: 12px;
+}
+
+form {
+  padding: 0;
+  /* overflow: hidden; */
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+
+  width: 780px;
+  height: 46px;
+  margin-top: 21px;
+}
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  margin: 0 auto;
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 795px;
+}
+
+.text_wrapper {
+  width: 550px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+label {
+  font-size: 14px;
+  font-family: Arial, sans-serif;
+  color: #000000;
+  width: 125px;
+  flex-shrink: 0;
+}
+
+.text_input {
+  background: #ffffff;
+  border: 1px solid #a1a0b3;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  outline: none;
+  border-radius: 1px;
+  letter-spacing: 0.26px;
+  box-sizing: border-box;
+  font-size: 29px;
+
+  width: 262px;
+  height: 46px;
+
+  padding: 0 8px;
+}
+.text_input:focus,
+.text_input:active {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgb(0 123 255 / 25%);
+}
+.text_input.highlight {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgb(0 123 255 / 25%);
+}
+.text_input::placeholder {
+  color: #a5a5a5;
+  font-size: 25px;
+}
+
+button {
+  margin: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: none;
+}
+
+.button {
+  font-family: Arial, sans-serif;
+  width: 214px;
+  height: 46px;
+  font-size: 20px;
+  font-weight: bold;
+  overflow: hidden;
+
+  background-color: #2e3192;
+  color: #ffffff;
+  border-radius: 4px;
+}
+
+.button:hover,
+.button:active,
+.button:focus {
+  background: #252767;
+}
+
+/* Select element class */
+.phone_code_select {
+  position: relative;
+  width: 130px;
+  display: flex;
+  background-color: #ffffff;
+  height: 46px;
+  border: 1px solid #a1a0b3;
+  border-radius: 1px;
+  outline: none;
+  font-size: 13px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.phone_code_select:focus,
+.phone_code_select:active {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgb(0 123 255 / 25%);
+}
