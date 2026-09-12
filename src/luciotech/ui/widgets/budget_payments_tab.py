@@ -143,7 +143,7 @@ class BudgetPaymentsTab(QWidget):
         summary_layout.addRow(HRLine())
 
         self._lbl_total = QLabel(format_money(0))
-        self._lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: #1a1a2e;")
+        self._lbl_total.setStyleSheet("font-size: 16px; font-weight: bold;")
         summary_layout.addRow("TOTAL:", self._lbl_total)
 
         self._lbl_advance = QLabel(format_money(0))
