@@ -69,36 +69,6 @@ presupuestos y el cobro.
 
 ---
 
-## Instalación
-
-### Entorno virtual (recomendado)
-
-Aísla las dependencias del sistema para no generar conflictos:
-
-```bash
-# Linux/macOS
-python3 -m venv venv && source venv/bin/activate
-
-# Windows
-python -m venv venv && venv\Scripts\activate
-```
-
-Una vez activo el entorno, instala el paquete en modo editable:
-
-```bash
-pip install -e .
-jl-mantenimiento
-```
-
-### ▶Inicio rápido
-
-```bash
-# Linux/macOS
-python3 main.py
-
-# Windows
-python main.py
-```
 
 ### Linux (paquetes del sistema)
 
