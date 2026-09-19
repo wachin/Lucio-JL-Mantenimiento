@@ -186,7 +186,9 @@ def create_application(argv: list[str] | None = None) -> QApplication:
 
     init_db()
     settings = SettingsService()
-    apply_theme(app, settings.get("theme", "Claro (sistema)"))
+    from luciotech.ui.theme import DEFAULT_THEME, apply_theme
+
+    apply_theme(app, settings.get("theme", DEFAULT_THEME))
 
     # Aplicar tamaño de fuente configurado
     font_size = settings.get_int("font_size", 0)

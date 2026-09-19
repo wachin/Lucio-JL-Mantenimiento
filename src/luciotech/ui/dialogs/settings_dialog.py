@@ -47,7 +47,15 @@ from luciotech.database.connection import get_session
 from luciotech.database.models import Settings
 from luciotech.services.backup_service import BackupService
 from luciotech.services.settings_service import SettingsService
-from luciotech.ui.theme import THEMES, apply_theme
+from luciotech.ui.theme import (
+    DEFAULT_THEME,
+    THEME_DARK,
+    THEME_LIGHT,
+    THEME_SYSTEM,
+    ThemeManager,
+    apply_theme,
+    normalize_theme_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,11 +207,21 @@ class SettingsDialog(QDialog):
         layout = QFormLayout(tab)
 
         self._theme_combo = QComboBox()
-        self._theme_combo.addItems(THEMES.keys())
-        current_theme = self._get("theme", "Claro (sistema)")
-        if current_theme in THEMES:
-            self._theme_combo.setCurrentText(current_theme)
+        self._theme_combo.addItems([THEME_SYSTEM, THEME_LIGHT, THEME_DARK])
+        self._theme_combo.setToolTip(
+            "Sistema: sigue el modo claro/oscuro de Windows y cambia en vivo\n"
+            "cuando el sistema cambia. Claro y Oscuro fijan el tema siempre."
+        )
+        self._theme_combo.setCurrentText(
+            normalize_theme_name(self._get("theme", DEFAULT_THEME))
+        )
+        self._theme_combo.currentTextChanged.connect(self._update_theme_preview)
         layout.addRow("Tema visual:", self._theme_combo)
+
+        self._theme_preview = QLabel()
+        self._theme_preview.setStyleSheet("color: palette(mid);")
+        layout.addRow("", self._theme_preview)
+        self._update_theme_preview(self._theme_combo.currentText())
 
         self._font_size_spin = QSpinBox()
         self._font_size_spin.setRange(0, 24)
@@ -714,6 +732,18 @@ class SettingsDialog(QDialog):
             self._session.commit()
             self._settings.clear()
             QMessageBox.information(self, "Restablecido", "Configuración restablecida. Reinicie la aplicación.")
+
+    def _update_theme_preview(self, mode: str) -> None:
+        """Describir el modo de tema elegido y el estado actual."""
+        descriptions = {
+            THEME_SYSTEM: "Sigue el modo claro/oscuro del sistema y cambia en vivo.",
+            THEME_LIGHT: "Tema claro fijo, independiente del sistema.",
+            THEME_DARK: "Tema oscuro fijo, independiente del sistema.",
+        }
+        current = ThemeManager.instance().effective_mode()
+        self._theme_preview.setText(
+            f"{descriptions.get(mode, '')} (Ahora: {current}.)"
+        )
 
     def _apply_theme(self) -> None:
         """Aplicar el tema visual seleccionado."""

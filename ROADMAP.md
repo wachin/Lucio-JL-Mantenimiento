@@ -331,7 +331,14 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Formato configurable de número de orden.
 - [x] Garantía predeterminada.
 - [x] Moneda e impuestos almacenados.
-- [x] Temas sistema, Fusion claro y Fusion oscuro.
+- [x] Modos de tema: Oscuro, Claro y Sistema
+  (nombres persistentes; los valores antiguos "...(sistema)"/"...(Fusion)"
+  se traducen automáticamente al cargar la configuración).
+- [x] Seguimiento en vivo del modo claro/oscuro del sistema
+  (`QStyleHints.colorSchemeChanged` reaplica la paleta con la app abierta;
+  antes el tema solo se resolvía al arrancar).
+- [x] Cambio rápido de tema desde la barra de herramientas
+  (botón "Tema" alterna Oscuro/Claro con Ctrl+T y guarda la elección).
 - [x] Carga del tema guardado al iniciar.
 - [x] Catálogo administrable de tipos de equipo.
 - [x] Aplicación inmediata del catálogo en Nueva recepción.
@@ -400,7 +407,7 @@ desmarcadas. No se considera terminada solo porque exista una pantalla o clase.
 - [x] Aislamiento de la base SQLite entre pruebas.
 - [x] `reset_connection()` cierra todas las sesiones vivas antes de disponer del
   motor, evitando que Windows retenga el archivo SQLite bloqueado (WinError 32).
-- [x] Ejecución actual: `78 passed` con `PYTHONPATH=src pytest -q` en Windows.
+- [x] Ejecución actual: `95 passed` con `PYTHONPATH=src pytest -q` en Windows.
 - [x] `.gitignore` para cachés, entornos, builds y logs.
 - [ ] Pruebas de validaciones de duplicados y formatos configurables.
 - [x] Pruebas de papelera, restauración e historial global (cubiertas en `test_p0_features.py`).

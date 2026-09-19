@@ -71,7 +71,7 @@ mantuvo abierta hasta que `timeout` la detuvo.
 
 ## Estado de verificación
 
-- Suite actual: **78 passed** en Windows (`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src pytest -q`).
+- Suite actual: **95 passed** en Windows (`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src pytest -q`).
 - `reset_connection()` cierra todas las sesiones antes de disponer el motor, lo
   que evita `WinError 32` al limpiar directorios temporales SQLite en Windows.
 - Arranque offscreen validado en iteraciones recientes.

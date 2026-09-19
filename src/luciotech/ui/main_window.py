@@ -9,6 +9,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QUrl
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QStackedWidget,
     QToolBar,
@@ -396,6 +397,24 @@ class MainWindow(QMainWindow):
         print_action.triggered.connect(self._contextual_print)
         toolbar.addAction(print_action)
 
+        toolbar.addSeparator()
+
+        # Cambio rápido de tema: alterna Oscuro <-> Claro (Ctrl+T)
+        from luciotech.ui.theme import ThemeManager
+
+        self._theme_action = QAction("Tema", self)
+        self._theme_action.setToolTip(
+            "Cambiar entre tema oscuro y claro (Ctrl+T).\n"
+            "Para seguir automáticamente el tema del sistema, use "
+            "Configuración -> Apariencia."
+        )
+        self._theme_action.setShortcut("Ctrl+T")
+        self._theme_action.triggered.connect(self._toggle_theme)
+        toolbar.addAction(self._theme_action)
+        manager = ThemeManager.instance()
+        manager.theme_changed.connect(self._on_theme_changed)
+        self._on_theme_changed(manager.effective_mode())
+
         self._setup_section_shortcuts()
 
     def _setup_section_shortcuts(self) -> None:
@@ -508,6 +527,27 @@ class MainWindow(QMainWindow):
             self, "Imprimir",
             "No hay nada para imprimir en esta vista.",
         )
+
+    def _toggle_theme(self) -> None:
+        """Alternar entre tema oscuro y claro, recordando la elección."""
+        from luciotech.services.settings_service import SettingsService
+        from luciotech.ui.theme import THEME_DARK, THEME_LIGHT, ThemeManager
+
+        manager = ThemeManager.instance()
+        target = THEME_DARK if manager.effective_mode() != THEME_DARK else THEME_LIGHT
+        app = QApplication.instance()
+        if app is None:
+            return
+        manager.apply(app, target)
+        try:
+            SettingsService().set("theme", target)
+        except Exception:
+            logger.exception("No se pudo guardar el tema elegido")
+
+    def _on_theme_changed(self, effective_mode: str) -> None:
+        """Mostrar en la barra el tema en vigor."""
+        if hasattr(self, "_theme_action"):
+            self._theme_action.setText(f"Tema: {effective_mode}")
 
     def _toggle_sidebar(self) -> None:
         """Alternar entre barra lateral colapsada y expandida."""
