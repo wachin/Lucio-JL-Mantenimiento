@@ -34,6 +34,16 @@ class SettingsService:
         except (TypeError, ValueError):
             return default
 
+    def set(self, key: str, value: str) -> None:
+        """Guardar (o actualizar) una configuración y confirmar el cambio."""
+        setting = self.session.query(Settings).filter(Settings.key == key).first()
+        if setting:
+            setting.value = value
+        else:
+            setting = Settings(key=key, value=value)
+            self.session.add(setting)
+        self.session.commit()
+
     # ------------------------------------------------------------------
     # Generic JSON-list helper
     # ------------------------------------------------------------------
